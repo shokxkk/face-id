@@ -141,7 +141,8 @@ function initDb() {
       { id: 7, emp_code: 'EMP-007', full_name: 'Muyassarxon', position: 'Xodim', department: 'Asosiy boʻlim', branch_id: 1, branch: 'Asosiy filial', base_salary: 2000000, phone: '+998 90 100 07 07', telegram_username: '@muyassarxon', telegram_chat_id: '', shift_start: '09:00', shift_end: '17:00', avatar_color: '#dc2626', face_registered: 1, face_descriptor: '', face_photo: '', active: 1 },
       { id: 8, emp_code: 'EMP-008', full_name: 'Malikaxon', position: 'Xodim', department: 'Asosiy boʻlim', branch_id: 1, branch: 'Asosiy filial', base_salary: 2000000, phone: '+998 90 100 08 08', telegram_username: '@malikaxon', telegram_chat_id: '', shift_start: '09:00', shift_end: '17:00', avatar_color: '#4f46e5', face_registered: 1, face_descriptor: '', face_photo: '', active: 1 },
       { id: 9, emp_code: 'EMP-009', full_name: 'Marjonaxon', position: 'Xodim', department: 'Asosiy boʻlim', branch_id: 1, branch: 'Asosiy filial', base_salary: 2000000, phone: '+998 90 100 09 09', telegram_username: '@marjonaxon', telegram_chat_id: '', shift_start: '09:00', shift_end: '17:00', avatar_color: '#0d9488', face_registered: 1, face_descriptor: '', face_photo: '', active: 1 },
-      { id: 10, emp_code: 'EMP-010', full_name: 'Durdonaxon', position: 'Xodim', department: 'Asosiy boʻlim', branch_id: 1, branch: 'Asosiy filial', base_salary: 2000000, phone: '+998 90 100 10 10', telegram_username: '@durdonaxon', telegram_chat_id: '', shift_start: '09:00', shift_end: '17:00', avatar_color: '#ea580c', face_registered: 1, face_descriptor: '', face_photo: '', active: 1 }
+      { id: 10, emp_code: 'EMP-010', full_name: 'Durdonaxon', position: 'Xodim', department: 'Asosiy boʻlim', branch_id: 1, branch: 'Asosiy filial', base_salary: 2000000, phone: '+998 90 100 10 10', telegram_username: '@durdonaxon', telegram_chat_id: '', shift_start: '09:00', shift_end: '17:00', avatar_color: '#ea580c', face_registered: 1, face_descriptor: '', face_photo: '', active: 1 },
+      { id: 11, emp_code: 'EMP-011', full_name: 'Shoxjaxon', position: 'ROP', department: 'Asosiy boʻlim', branch_id: 1, branch: 'Asosiy filial', base_salary: 4000000, phone: '+998975571716', telegram_username: '@marketingmarkazi_4', telegram_chat_id: '7593584444', shift_start: '09:00', shift_end: '17:00', avatar_color: '#10b981', face_registered: 1, face_descriptor: '', face_photo: '', active: 1 }
     ];
     store.employees = initialEmployees;
 
@@ -158,6 +159,15 @@ function initDb() {
       { id: 9, employee_id: 9, date: todayStr, check_in: '09:15', check_out: null, status: 'present', source: 'Face ID Kamera', device_name: 'Terminal #1', gps_distance_m: 18, snapshot_data: '', audit_note: '15 min kechikdi (-15 000 jarima)' },
       { id: 10, employee_id: 10, date: todayStr, check_in: null, check_out: null, status: 'absent', source: 'Avto-nazorat', device_name: 'Kelmadi', gps_distance_m: null, snapshot_data: '', audit_note: 'Ishga kelmadi (-150 000 jarima)' }
     ];
+  }
+
+  // Ensure any corrupted non-array face_descriptor (such as numeric 1) is cleaned up
+  if (Array.isArray(store.employees)) {
+    for (const e of store.employees) {
+      if (typeof e.face_descriptor !== 'string' || e.face_descriptor.length < 20) {
+        e.face_descriptor = '';
+      }
+    }
   }
 
   saveStore();
@@ -389,9 +399,9 @@ const db = {
             shift_start: params[10] || '09:00',
             shift_end: params[11] || '17:00',
             avatar_color: params[12] || '#10b981',
-            face_registered: 1,
-            face_descriptor: params[13] || '',
-            face_photo: params[14] || '',
+            face_registered: params[13] ?? 1,
+            face_descriptor: typeof params[14] === 'string' && params[14].length > 20 ? params[14] : '',
+            face_photo: params[15] || '',
             active: 1
           });
           saveStore();
