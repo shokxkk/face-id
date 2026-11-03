@@ -317,7 +317,18 @@
     }, 1000);
     document.getElementById('dateText').textContent = new Date().toLocaleDateString('uz-UZ', { day: '2-digit', month: 'short' });
 
-    let employees = [];
+    let employees = [
+      { id: 1, full_name: 'Muqaddasxon', face_descriptor: '' },
+      { id: 2, full_name: 'Boburjon', face_descriptor: '' },
+      { id: 3, full_name: 'Xamidullo', face_descriptor: '' },
+      { id: 4, full_name: 'Nargizaxon', face_descriptor: '' },
+      { id: 5, full_name: 'Nodirjon', face_descriptor: '' },
+      { id: 6, full_name: 'Dildoraxon', face_descriptor: '' },
+      { id: 7, full_name: 'Muyassarxon', face_descriptor: '' },
+      { id: 8, full_name: 'Malikaxon', face_descriptor: '' },
+      { id: 9, full_name: 'Marjonaxon', face_descriptor: '' },
+      { id: 10, full_name: 'Durdonaxon', face_descriptor: '' }
+    ];
     let aiModelsReady = false;
     let currentFaceDescriptor = null;
     let currentFaceScore = 0;
@@ -347,10 +358,7 @@
       }
     }
 
-    async function loadEmployees() {
-      const res = await fetch('/api/employees');
-      const data = await res.json();
-      employees = data.employees || [];
+    function renderEmployeesDropdown() {
       const sel = document.getElementById('empSelect');
       const prevVal = sel.value;
       sel.innerHTML = employees.map(e => `<option value="${e.id}">${e.full_name}</option>`).join('');
@@ -358,6 +366,18 @@
         sel.value = prevVal;
       }
       updateSelectedEmpBioTag();
+    }
+
+    async function loadEmployees() {
+      renderEmployeesDropdown();
+      try {
+        const res = await fetch('/api/employees');
+        const data = await res.json();
+        if (Array.isArray(data.employees) && data.employees.length > 0) {
+          employees = data.employees;
+          renderEmployeesDropdown();
+        }
+      } catch (e) {}
     }
     loadEmployees();
 
