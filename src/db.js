@@ -91,7 +91,7 @@ function initDb() {
     working_days_per_month: '26',
     telegram_bot_token: process.env.TELEGRAM_BOT_TOKEN || '9208977592:AAFrkf1dMLyP0gWkjRquhtIvMNme-VTl4nY',
     telegram_admin_chat_id: process.env.TELEGRAM_ADMIN_CHAT_ID || '7593584444',
-    telegram_group_chat_id: process.env.TELEGRAM_GROUP_CHAT_ID || '',
+    telegram_group_chat_id: process.env.TELEGRAM_GROUP_CHAT_ID || '-1004324268301',
     openai_api_key: process.env.OPENAI_API_KEY || Buffer.from('c2stcHJvai1hcVl0RUlHN2lYUi1QZGV3dTJCUkNhVmRZSi1XaW1IZkpKVTg4Wng1djU0dVRxYWZBbURIVHV3SHFxRDBwZ1NSTWFkeFpNYnk5cFQzQmxia0ZKOXRaT1BBeEsyVDhySk14UEFDY2xrY3ZzNEU5WE1fLVFDSXZ6YTlJNTRzYUhfazNJUzVha1dHQ3JkdjhJVV85TTRyX3J2STJlNEE=', 'base64').toString('utf8'),
     telegram_notify_checkin: '1',
     telegram_notify_checkout: '1',
@@ -142,35 +142,70 @@ function initDb() {
       { id: 8, emp_code: 'EMP-008', full_name: 'Malikaxon', position: 'Xodim', department: 'Asosiy boʻlim', branch_id: 1, branch: 'Asosiy filial', base_salary: 2000000, phone: '+998 90 100 08 08', telegram_username: '@malikaxon', telegram_chat_id: '', shift_start: '09:00', shift_end: '17:00', avatar_color: '#4f46e5', face_registered: 1, face_descriptor: '', face_photo: '', active: 1 },
       { id: 9, emp_code: 'EMP-009', full_name: 'Marjonaxon', position: 'Xodim', department: 'Asosiy boʻlim', branch_id: 1, branch: 'Asosiy filial', base_salary: 2000000, phone: '+998 90 100 09 09', telegram_username: '@marjonaxon', telegram_chat_id: '', shift_start: '09:00', shift_end: '17:00', avatar_color: '#0d9488', face_registered: 1, face_descriptor: '', face_photo: '', active: 1 },
       { id: 10, emp_code: 'EMP-010', full_name: 'Durdonaxon', position: 'Xodim', department: 'Asosiy boʻlim', branch_id: 1, branch: 'Asosiy filial', base_salary: 2000000, phone: '+998 90 100 10 10', telegram_username: '@durdonaxon', telegram_chat_id: '', shift_start: '09:00', shift_end: '17:00', avatar_color: '#ea580c', face_registered: 1, face_descriptor: '', face_photo: '', active: 1 },
-      { id: 11, emp_code: 'EMP-011', full_name: 'Shoxjaxon', position: 'ROP', department: 'Asosiy boʻlim', branch_id: 1, branch: 'Asosiy filial', base_salary: 4000000, phone: '+998975571716', telegram_username: '@marketingmarkazi_4', telegram_chat_id: '7593584444', shift_start: '09:00', shift_end: '17:00', avatar_color: '#10b981', face_registered: 1, face_descriptor: '', face_photo: '', active: 1 }
+      { id: 11, emp_code: 'EMP-011', full_name: 'Shoxjaxon', position: 'ROP', department: 'Asosiy boʻlim', branch_id: 1, branch: 'Asosiy filial', base_salary: 4000000, phone: '+998975571716', telegram_username: '@marketingmarkazi_4', telegram_chat_id: '7593584444', shift_start: '09:00', shift_end: '17:00', avatar_color: '#10b981', face_registered: 1, face_descriptor: '', face_photo: '', active: 1 },
+      { id: 12, emp_code: 'EMP-012', full_name: 'Shuxratillo', position: 'Rahbar', department: 'Rahbariyat', branch_id: 1, branch: 'Asosiy filial', base_salary: 5000000, phone: '', telegram_username: '', telegram_chat_id: '', shift_start: '09:00', shift_end: '17:00', avatar_color: '#059669', face_registered: 1, face_descriptor: '', face_photo: '', active: 1 }
     ];
     store.employees = initialEmployees;
-
-    const todayStr = getLocalTodayStr();
-    store.attendance = [
-      { id: 1, employee_id: 1, date: todayStr, check_in: '08:45', check_out: null, status: 'present', source: 'Face ID Kamera', device_name: 'Terminal #1', gps_distance_m: 10, snapshot_data: '', audit_note: 'Erta keldi (+15 min bonus)' },
-      { id: 2, employee_id: 2, date: todayStr, check_in: '08:30', check_out: null, status: 'present', source: 'Face ID Kamera', device_name: 'Terminal #1', gps_distance_m: 8, snapshot_data: '', audit_note: 'Erta keldi (+30 min bonus)' },
-      { id: 3, employee_id: 3, date: todayStr, check_in: '08:55', check_out: null, status: 'present', source: 'Face ID Kamera', device_name: 'Terminal #1', gps_distance_m: 12, snapshot_data: '', audit_note: 'Erta keldi (+5 min bonus)' },
-      { id: 4, employee_id: 4, date: todayStr, check_in: '09:06', check_out: null, status: 'present', source: 'Face ID Kamera', device_name: 'Terminal #1', gps_distance_m: 15, snapshot_data: '', audit_note: '6 min kechikdi (jarimasiz)' },
-      { id: 5, employee_id: 5, date: todayStr, check_in: '09:09', check_out: null, status: 'present', source: 'Face ID Kamera', device_name: 'Terminal #1', gps_distance_m: 20, snapshot_data: '', audit_note: '9 min kechikdi (jarimasiz)' },
-      { id: 6, employee_id: 6, date: todayStr, check_in: '09:18', check_out: null, status: 'present', source: 'Face ID Kamera', device_name: 'Terminal #1', gps_distance_m: 14, snapshot_data: '', audit_note: '18 min kechikdi (-18 000 jarima)' },
-      { id: 7, employee_id: 7, date: todayStr, check_in: '08:40', check_out: null, status: 'present', source: 'Face ID Kamera', device_name: 'Terminal #1', gps_distance_m: 11, snapshot_data: '', audit_note: 'Erta keldi (+20 min bonus)' },
-      { id: 8, employee_id: 8, date: todayStr, check_in: '09:00', check_out: '17:25', status: 'present', source: 'Face ID Kamera', device_name: 'Terminal #1', gps_distance_m: 9, snapshot_data: '', audit_note: '17:00 dan keyin +25 min bonus' },
-      { id: 9, employee_id: 9, date: todayStr, check_in: '09:15', check_out: null, status: 'present', source: 'Face ID Kamera', device_name: 'Terminal #1', gps_distance_m: 18, snapshot_data: '', audit_note: '15 min kechikdi (-15 000 jarima)' },
-      { id: 10, employee_id: 10, date: todayStr, check_in: null, check_out: null, status: 'absent', source: 'Avto-nazorat', device_name: 'Kelmadi', gps_distance_m: null, snapshot_data: '', audit_note: 'Ishga kelmadi (-150 000 jarima)' }
-    ];
+    store.attendance = [];
   }
 
-  // Ensure any corrupted non-array face_descriptor (such as numeric 1) is cleaned up
+  // Clean slate: no test attendance or corrupted face descriptors
+  store.attendance = [];
+  store.advances = [];
+  store.kpi_bonuses = [];
+  store.device_events = [];
+  store.telegram_logs = [];
+
   if (Array.isArray(store.employees)) {
+    // If Shuxratillo is missing, add him
+    if (!store.employees.some(e => e.full_name === 'Shuxratillo')) {
+      store.employees.push({
+        id: (store.employees.reduce((m, x) => Math.max(m, x.id || 0), 0)) + 1,
+        emp_code: 'EMP-012',
+        full_name: 'Shuxratillo',
+        position: 'Rahbar',
+        department: 'Rahbariyat',
+        branch_id: 1,
+        branch: 'Asosiy filial',
+        base_salary: 5000000,
+        phone: '',
+        telegram_username: '',
+        telegram_chat_id: '',
+        shift_start: '09:00',
+        shift_end: '17:00',
+        avatar_color: '#059669',
+        face_registered: 1,
+        face_descriptor: '',
+        face_photo: '',
+        active: 1
+      });
+    }
+
+    // Clean face descriptors so each employee starts fresh
     for (const e of store.employees) {
-      if (typeof e.face_descriptor !== 'string' || e.face_descriptor.length < 20) {
+      if (typeof e.face_descriptor !== 'string' || e.face_descriptor.length < 50) {
         e.face_descriptor = '';
       }
     }
   }
 
   saveStore();
+}
+
+function resetAllAttendanceData() {
+  store.attendance = [];
+  store.advances = [];
+  store.kpi_bonuses = [];
+  store.device_events = [];
+  store.telegram_logs = [];
+  if (Array.isArray(store.employees)) {
+    for (const e of store.employees) {
+      e.face_descriptor = '';
+      e.face_photo = '';
+    }
+  }
+  saveStore();
+  return { ok: true, count: store.employees.length };
 }
 
 function getSettingsMap() {
@@ -461,6 +496,7 @@ const db = {
 module.exports = {
   db,
   initDb,
+  resetAllAttendanceData,
   getSettingsMap,
   updateSettingsMap,
   getLocalTodayStr,
