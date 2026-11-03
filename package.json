@@ -1,0 +1,10 @@
+{
+  "name": "faceid-pro-k4",
+  "version": "1.0.0",
+  "description": "FaceID Pro K4 — Учёт посещаемости по лицу (Веб-камера, Hikvision ISAPI, Telegram WebApp + GPS), автоматический расчёт зарплаты, бонусов (8:30-9:00), штрафов (>10 мин) и HR",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node test_rules.js"
+  }
+}
