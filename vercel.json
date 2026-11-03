@@ -1,0 +1,11 @@
+{
+  "version": 2,
+  "rewrites": [
+    { "source": "/api/(.*)", "destination": "/api/index.js" },
+    { "source": "/admin", "destination": "/admin.html" },
+    { "source": "/panel", "destination": "/admin.html" },
+    { "source": "/terminal", "destination": "/terminal.html" },
+    { "source": "/webapp", "destination": "/index.html" },
+    { "source": "/", "destination": "/index.html" }
+  ]
+}
