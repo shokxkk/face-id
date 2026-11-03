@@ -55,12 +55,10 @@ function buildMainReplyKeyboard() {
 function getTargetChatIds(explicitChatId, settings) {
   if (explicitChatId) return [String(explicitChatId).trim()];
   const ids = new Set();
-  if (settings.telegram_group_chat_id) {
-    ids.add(String(settings.telegram_group_chat_id).trim());
-  }
-  if (settings.telegram_admin_chat_id) {
-    ids.add(String(settings.telegram_admin_chat_id).trim());
-  }
+  const group = (settings.telegram_group_chat_id || '-1004324268301').trim();
+  const admin = (settings.telegram_admin_chat_id || '7593584444').trim();
+  if (group) ids.add(group);
+  if (admin && admin !== group) ids.add(admin);
   return Array.from(ids).filter(Boolean);
 }
 
@@ -107,7 +105,19 @@ async function sendPhotoToChat({ token, chatId, base64Image, captionHtml, replyM
       method: 'POST',
       body: form
     });
-    return await res.json();
+    const data = await res.json();
+    if (data && data.parameters && data.parameters.migrate_to_chat_id) {
+      const newId = String(data.parameters.migrate_to_chat_id);
+      updateSettingsMap({ telegram_group_chat_id: newId });
+      // Retry once to new supergroup
+      form.set('chat_id', newId);
+      const retryRes = await fetch(`https://api.telegram.org/bot${token}/sendPhoto`, {
+        method: 'POST',
+        body: form
+      });
+      return await retryRes.json();
+    }
+    return data;
   } catch (err) {
     return { ok: false, description: err.message };
   }
@@ -156,12 +166,23 @@ async function sendTelegramNotification({
         if (parseMode) payload.parse_mode = parseMode;
         if (replyMarkup) payload.reply_markup = replyMarkup;
 
-        const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+        let res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload)
         });
-        const data = await res.json();
+        let data = await res.json();
+        if (data && data.parameters && data.parameters.migrate_to_chat_id) {
+          const newId = String(data.parameters.migrate_to_chat_id);
+          updateSettingsMap({ telegram_group_chat_id: newId });
+          payload.chat_id = newId;
+          res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+          });
+          data = await res.json();
+        }
         if (data && data.ok) {
           delivered = 1;
         } else {
@@ -370,14 +391,11 @@ async function sendMonthlySummaryToTelegram(payrollList, yearMonth, targetChatId
     `📉 <b>Kelmadi ayrilmasi:</b> <code>-${totalAbsences.toLocaleString('ru-RU')} so'm</code>\n` +
     `🏦 <b>JAMI TOʻLOV:</b> <code>${totalPayout.toLocaleString('ru-RU')} so'm</code>`;
 
-  const empButtons = buildEmployeeGridInline('empcard');
-
   return sendTelegramNotification({
     eventType: 'MONTHLY_REPORT',
     recipientLabel: 'Kichik Tabib — Oylik Hisobot',
     chatId: targetChatId,
-    text,
-    replyMarkup: empButtons
+    text
   });
 }
 
@@ -547,9 +565,9 @@ async function handleSingleTelegramUpdate(upd, getAppContext) {
         `━━━━━━━━━━━━━━━━━━━━━━\n` +
         `✅ Guruh: <b>${escapeHtml(msg.chat.title || 'Guruh')}</b> (<code>${chatId}</code>)\n\n` +
         `📸 Endi umumiy <b>Face ID kameradan</b> olingan barcha rasmlar va keldi-ketdi hisobotlari shu guruhga avtomatik tushadi!`,
-      buildEmployeeGridInline('empcard')
+      null
     );
-    if (text === '/start' || text === '/group') return;
+    return;
   }
 
   if (!isGroup && !settings.telegram_admin_chat_id) {
@@ -566,25 +584,15 @@ async function handleSingleTelegramUpdate(upd, getAppContext) {
       `⚠️ <b>09:10 dan kech qolsa:</b> Har minutiga -1 000 so'm JARIMA\n` +
       `🔴 <b>Ishga umuman kelmasa:</b> -150 000 so'm JARIMA\n` +
       `🌙 <b>17:00 dan keyin ishlasa:</b> Har minutiga +1 000 so'm QOʻSHIMCHA\n\n` +
-      `👇 <b>Xodim ustiga bosing (Keldi / Ketdi / Avans):</b>`;
+      `📸 <i>Face ID kameradan har bir xodim oʻtganda foto-hisobot shu yerga avtomatik tushadi.</i>`;
 
-    await sendBrandWelcomePhoto(chatId, welcomeCaption, buildEmployeeGridInline('empcard'));
-    if (!isGroup) {
-      await sendTelegramNotification({
-        eventType: 'KEYBOARD_INIT',
-        recipientLabel: `@${msg.from?.username || chatId}`,
-        chatId,
-        text: `⚡️ Tezkor boshqaruv tugmalari:`,
-        replyMarkup: buildMainReplyKeyboard()
-      });
-    }
-  } else if (text === '🟢 Keldi / Ketdi belgilash' || text === '💳 Avans berish') {
+    await sendBrandWelcomePhoto(chatId, welcomeCaption, null);
     await sendTelegramNotification({
-      eventType: 'BOT_MENU',
+      eventType: 'CLEAR_KEYBOARD',
       recipientLabel: `@${msg.from?.username || chatId}`,
       chatId,
-      text: `🌿 <b>KICHIK TABIB — XODIMNI TANLANG:</b>`,
-      replyMarkup: buildEmployeeGridInline('empcard')
+      text: `✅ Tizim faol! Bot faqat bildirishnoma va rasmlarni yetkazib beradi.`,
+      replyMarkup: { remove_keyboard: true }
     });
   } else if (text === '/today' || text === '📊 Bugungi davomat') {
     const summary = ctx.getTodayQuickText();
@@ -592,8 +600,8 @@ async function handleSingleTelegramUpdate(upd, getAppContext) {
       eventType: 'BOT_REPLY',
       recipientLabel: `@${msg.from?.username || chatId}`,
       chatId,
-      replyMarkup: buildEmployeeGridInline('empcard'),
-      text: summary
+      text: summary,
+      replyMarkup: { remove_keyboard: true }
     });
   } else if (text === '/month' || text === '/salary' || text === '💰 Oylik hisob-kitob') {
     const payrolls = ctx.getMonthlyPayrolls();
@@ -604,7 +612,7 @@ async function handleSingleTelegramUpdate(upd, getAppContext) {
       eventType: 'AI_BOT_REPLY',
       recipientLabel: `@${msg.from?.username || chatId}`,
       chatId,
-      replyMarkup: isGroup ? null : buildMainReplyKeyboard(),
+      replyMarkup: { remove_keyboard: true },
       text: `🌿 <b>Kichik Tabib AI:</b>\n\n${escapeHtml((aiReply.answer || '').replace(/\*\*/g, ''))}`
     });
   }
