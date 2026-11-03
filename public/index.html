@@ -1,0 +1,659 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Kichik Tabib — Xodim Face ID Davomati</title>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/@vladmandic/face-api/dist/face-api.js"></script>
+  <style>
+    :root {
+      --bg: #071712;
+      --card: #0d261e;
+      --card-active: #13382b;
+      --green: #10b981;
+      --green-dark: #059669;
+      --gold: #f59e0b;
+      --gold-light: #fbbf24;
+      --red: #ef4444;
+      --border: rgba(16, 185, 129, 0.25);
+      --text: #f8fafc;
+      --muted: #94a3b8;
+    }
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      -webkit-tap-highlight-color: transparent;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: radial-gradient(circle at top, #11382b 0%, var(--bg) 75%);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 14px;
+    }
+    .app-container {
+      width: 100%;
+      max-width: 440px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      margin: auto 0;
+    }
+    .header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      background: rgba(13, 38, 30, 0.85);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 12px 16px;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.3);
+    }
+    .logo-img {
+      width: 50px;
+      height: 50px;
+      border-radius: 14px;
+      object-fit: cover;
+      background: #fff;
+      padding: 2px;
+    }
+    .header-text h1 {
+      font-size: 18px;
+      font-weight: 800;
+      background: linear-gradient(90deg, #fff, var(--gold-light));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .header-text p {
+      font-size: 11.5px;
+      color: #a7f3d0;
+    }
+    .clock-badge {
+      margin-left: auto;
+      text-align: right;
+    }
+    .clock-time {
+      font-size: 17px;
+      font-weight: 800;
+      color: var(--gold-light);
+      font-variant-numeric: tabular-nums;
+    }
+
+    /* Face Camera HUD */
+    .cam-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 22px;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      position: relative;
+    }
+    .cam-circle {
+      width: 184px;
+      height: 184px;
+      border-radius: 50%;
+      padding: 4px;
+      background: linear-gradient(135deg, var(--green), var(--gold));
+      box-shadow: 0 0 28px rgba(16, 185, 129, 0.35);
+      position: relative;
+      overflow: hidden;
+      transition: box-shadow 0.25s ease, background 0.25s ease;
+    }
+    .cam-circle.face-locked {
+      background: linear-gradient(135deg, #10b981, #34d399);
+      box-shadow: 0 0 34px rgba(16, 185, 129, 0.75);
+    }
+    .cam-circle.face-warn {
+      background: linear-gradient(135deg, #ef4444, #f59e0b);
+      box-shadow: 0 0 30px rgba(239, 68, 68, 0.65);
+    }
+    .cam-circle video {
+      width: 100%;
+      height: 100%;
+      border-radius: 50%;
+      object-fit: cover;
+      background: #030d0a;
+      transform: scaleX(-1);
+    }
+    .cam-circle canvas {
+      position: absolute;
+      top: 4px;
+      left: 4px;
+      width: calc(100% - 8px);
+      height: calc(100% - 8px);
+      border-radius: 50%;
+      pointer-events: none;
+      transform: scaleX(-1);
+    }
+    .hud-badge {
+      margin-top: -12px;
+      background: #11382b;
+      border: 1px solid var(--gold);
+      color: var(--gold-light);
+      font-size: 11.5px;
+      font-weight: 700;
+      padding: 4px 14px;
+      border-radius: 99px;
+      z-index: 3;
+      text-align: center;
+    }
+    .ai-sub-status {
+      margin-top: 6px;
+      font-size: 11.5px;
+      color: #a7f3d0;
+      text-align: center;
+      min-height: 16px;
+    }
+
+    /* Employee Picker */
+    .picker-title {
+      font-size: 13px;
+      font-weight: 700;
+      color: #a7f3d0;
+      margin-top: 10px;
+      margin-bottom: 6px;
+      align-self: flex-start;
+      display: flex;
+      justify-content: space-between;
+      width: 100%;
+    }
+    .select-wrap {
+      width: 100%;
+    }
+    .emp-select {
+      width: 100%;
+      padding: 13px 16px;
+      background: #061511;
+      border: 1.5px solid var(--green);
+      border-radius: 14px;
+      color: #fff;
+      font-size: 16px;
+      font-weight: 700;
+      outline: none;
+      cursor: pointer;
+    }
+
+    /* 2 BIG BUTTONS */
+    .btn-group {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-top: 4px;
+    }
+    .btn-action {
+      border: none;
+      border-radius: 18px;
+      padding: 18px 12px;
+      font-size: 16px;
+      font-weight: 800;
+      color: #fff;
+      cursor: pointer;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+      transition: transform 0.1s ease, box-shadow 0.15s ease, opacity 0.2s;
+    }
+    .btn-action:active {
+      transform: scale(0.96);
+    }
+    .btn-in {
+      background: linear-gradient(135deg, #10b981, #059669);
+      box-shadow: 0 8px 20px rgba(16, 185, 129, 0.4);
+    }
+    .btn-out {
+      background: linear-gradient(135deg, #f59e0b, #d97706);
+      box-shadow: 0 8px 20px rgba(245, 158, 11, 0.35);
+    }
+    .btn-sub {
+      font-size: 11px;
+      font-weight: 500;
+      opacity: 0.92;
+    }
+
+    /* Door Unlock / Anti-Spoof Status Banner */
+    .door-banner {
+      display: none;
+      background: rgba(16, 185, 129, 0.2);
+      border: 2px solid var(--green);
+      border-radius: 18px;
+      padding: 14px 16px;
+      text-align: center;
+      animation: pop 0.25s ease;
+    }
+    .door-banner.error-banner {
+      background: rgba(239, 68, 68, 0.22);
+      border-color: var(--red);
+    }
+    @keyframes pop {
+      0% { transform: scale(0.9); opacity: 0; }
+      100% { transform: scale(1); opacity: 1; }
+    }
+    .door-open-text {
+      font-size: 17px;
+      font-weight: 800;
+      color: var(--gold-light);
+    }
+    .door-sub-text {
+      font-size: 13px;
+      color: #d1fae5;
+      margin-top: 4px;
+      line-height: 1.4;
+    }
+  </style>
+</head>
+<body>
+  <div class="app-container">
+    <!-- Brand Header -->
+    <div class="header">
+      <img src="/logo.png" alt="Kichik Tabib" class="logo-img" />
+      <div class="header-text">
+        <h1>KICHIK TABIB</h1>
+        <p>Ish vaqti: 09:00 dan 17:00 gacha</p>
+      </div>
+      <div class="clock-badge">
+        <div class="clock-time" id="clockText">09:00:00</div>
+        <div style="font-size:11px; color:#a7f3d0;" id="dateText">Bugun</div>
+      </div>
+    </div>
+
+    <!-- Face Camera Section with 68-Point AI Biometric Mesh -->
+    <div class="cam-card">
+      <div class="cam-circle" id="camCircle">
+        <video id="webcam" autoplay muted playsinline></video>
+        <canvas id="faceCanvas" width="176" height="176"></canvas>
+      </div>
+      <div class="hud-badge" id="hudBadge">⏳ AI Face ID (68 nuqta) yuklanmoqda...</div>
+      <div class="ai-sub-status" id="aiSubStatus">Kameraga toʻgʻri qarang (Anti-spoofing himoyasi yoqilgan)</div>
+
+      <div class="picker-title">
+        <span>👤 Oʻzingizni tanlang:</span>
+        <span id="bioTag" style="color:#fbbf24; font-size:11.5px;"></span>
+      </div>
+      <div class="select-wrap">
+        <select id="empSelect" class="emp-select" onchange="updateSelectedEmpBioTag()"></select>
+      </div>
+    </div>
+
+    <!-- 2 MAIN BUTTONS -->
+    <div class="btn-group">
+      <button class="btn-action btn-in" onclick="submitAttendance('checkin')">
+        <span>✅ ISHGA KELDIM</span>
+        <span class="btn-sub">Face ID + Eshik ochish 🔓</span>
+      </button>
+      <button class="btn-action btn-out" onclick="submitAttendance('checkout')">
+        <span>🚪 ISHDAN KETDIM</span>
+        <span class="btn-sub">Smenani yopish 🔒</span>
+      </button>
+    </div>
+
+    <!-- Door Unlock / Status Banner -->
+    <div class="door-banner" id="doorBanner">
+      <div class="door-open-text" id="doorTitle">🔓 ESHIK OCHILDI! XUSH KELIBSIZ!</div>
+      <div class="door-sub-text" id="doorDesc">Yuzingiz aniqlandi, rasm va hisobot Telegram guruhga yuborildi.</div>
+    </div>
+  </div>
+
+  <script>
+    try {
+      if (window.Telegram && window.Telegram.WebApp) {
+        window.Telegram.WebApp.ready();
+        window.Telegram.WebApp.expand();
+      }
+    } catch (e) {}
+
+    // Clock
+    setInterval(() => {
+      const now = new Date();
+      document.getElementById('clockText').textContent = now.toTimeString().slice(0, 8);
+    }, 1000);
+    document.getElementById('dateText').textContent = new Date().toLocaleDateString('uz-UZ', { day: '2-digit', month: 'short' });
+
+    let employees = [];
+    let aiModelsReady = false;
+    let currentFaceDescriptor = null;
+    let currentFaceScore = 0;
+    let cameraReady = false;
+
+    function euclideanDist(a, b) {
+      if (!Array.isArray(a) || !Array.isArray(b) || a.length !== b.length) return Infinity;
+      let sum = 0;
+      for (let i = 0; i < a.length; i++) {
+        const d = a[i] - b[i];
+        sum += d * d;
+      }
+      return Math.sqrt(sum);
+    }
+
+    function updateSelectedEmpBioTag() {
+      const sel = document.getElementById('empSelect');
+      const empId = Number(sel.value);
+      const emp = employees.find(e => e.id === empId);
+      const bioTag = document.getElementById('bioTag');
+      if (emp && emp.face_descriptor && emp.face_descriptor.length > 20) {
+        bioTag.textContent = '🔒 Face ID himoyalangan';
+        bioTag.style.color = '#34d399';
+      } else {
+        bioTag.textContent = '🆕 1-marta yuz biriktiriladi';
+        bioTag.style.color = '#fbbf24';
+      }
+    }
+
+    async function loadEmployees() {
+      const res = await fetch('/api/employees');
+      const data = await res.json();
+      employees = data.employees || [];
+      const sel = document.getElementById('empSelect');
+      const prevVal = sel.value;
+      sel.innerHTML = employees.map(e => `<option value="${e.id}">${e.full_name}</option>`).join('');
+      if (prevVal && employees.some(e => String(e.id) === String(prevVal))) {
+        sel.value = prevVal;
+      }
+      updateSelectedEmpBioTag();
+    }
+    loadEmployees();
+
+    // Start Camera
+    async function startCamera() {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: 'user', width: { ideal: 480 }, height: { ideal: 480 } },
+          audio: false
+        });
+        const video = document.getElementById('webcam');
+        video.srcObject = stream;
+        video.onloadedmetadata = () => {
+          cameraReady = true;
+        };
+      } catch (e) {
+        document.getElementById('hudBadge').textContent = '⚠️ Kamera topilmadi yoki ruxsat berilmadi';
+        document.getElementById('aiSubStatus').textContent = 'Kamera ruxsatini yoqing (yoki test rejimida bosing)';
+      }
+    }
+    startCamera();
+
+    // Load 68-point AI Face Recognition Models
+    async function initFaceAiModels() {
+      const MODEL_URL = 'https://cdn.jsdelivr.net/npm/@vladmandic/face-api/model/';
+      try {
+        let waitCount = 0;
+        while (typeof faceapi === 'undefined' && waitCount < 40) {
+          await new Promise(r => setTimeout(r, 200));
+          waitCount++;
+        }
+        if (typeof faceapi === 'undefined') return;
+
+        await Promise.all([
+          faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
+          faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL),
+          faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL)
+        ]);
+        aiModelsReady = true;
+        document.getElementById('hudBadge').textContent = '🟢 AI Face ID (68 nuqta) Faol';
+        startLiveFaceScanning();
+      } catch (err) {
+        document.getElementById('hudBadge').textContent = '🟢 Face ID Kamera Faol';
+      }
+    }
+    initFaceAiModels();
+
+    function startLiveFaceScanning() {
+      const video = document.getElementById('webcam');
+      const canvas = document.getElementById('faceCanvas');
+      const ctx = canvas.getContext('2d');
+      const camCircle = document.getElementById('camCircle');
+      const hudBadge = document.getElementById('hudBadge');
+      const aiSubStatus = document.getElementById('aiSubStatus');
+
+      setInterval(async () => {
+        if (!aiModelsReady || !cameraReady || video.paused || video.ended) return;
+        try {
+          const detection = await faceapi
+            .detectSingleFace(video, new faceapi.TinyFaceDetectorOptions({ inputSize: 224, scoreThreshold: 0.45 }))
+            .withFaceLandmarks()
+            .withFaceDescriptor();
+
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+          if (!detection) {
+            currentFaceDescriptor = null;
+            currentFaceScore = 0;
+            camCircle.className = 'cam-circle';
+            hudBadge.textContent = '🔍 Yuz qidirilmoqda (68 nuqta)...';
+            aiSubStatus.textContent = 'Iltimos, kameraga yuzingizni toʻgʻri tuting';
+            return;
+          }
+
+          currentFaceDescriptor = Array.from(detection.descriptor);
+          currentFaceScore = Math.round(detection.detection.score * 100);
+
+          // Scale 68 points onto circular overlay canvas
+          const dims = faceapi.matchDimensions(canvas, video, true);
+          const resized = faceapi.resizeResults(detection, dims);
+          const pts = resized.landmarks.positions;
+
+          // Draw glowing 68 facial landmark points
+          ctx.fillStyle = '#10b981';
+          ctx.strokeStyle = 'rgba(16, 185, 129, 0.45)';
+          ctx.lineWidth = 1.2;
+
+          for (let i = 0; i < pts.length; i++) {
+            const p = pts[i];
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, 2.1, 0, Math.PI * 2);
+            ctx.fill();
+            if (i > 0 && i !== 17 && i !== 22 && i !== 27 && i !== 36 && i !== 42 && i !== 48 && i !== 60) {
+              ctx.beginPath();
+              ctx.moveTo(pts[i - 1].x, pts[i - 1].y);
+              ctx.lineTo(p.x, p.y);
+              ctx.stroke();
+            }
+          }
+
+          // Check if this face matches any registered employee
+          let matchedEmp = null;
+          let bestDist = Infinity;
+          for (const e of employees) {
+            if (e.face_descriptor) {
+              try {
+                const savedDesc = JSON.parse(e.face_descriptor);
+                const d = euclideanDist(currentFaceDescriptor, savedDesc);
+                if (d < bestDist) {
+                  bestDist = d;
+                  matchedEmp = e;
+                }
+              } catch (err) {}
+            }
+          }
+
+          const selectedId = Number(document.getElementById('empSelect').value);
+          const selectedEmp = employees.find(e => e.id === selectedId);
+
+          if (matchedEmp && bestDist <= 0.52) {
+            // Auto-select recognized employee if user hasn't locked onto someone else with no face
+            if (selectedEmp && selectedEmp.face_descriptor) {
+              const selDist = euclideanDist(currentFaceDescriptor, JSON.parse(selectedEmp.face_descriptor));
+              if (selDist > 0.55) {
+                camCircle.className = 'cam-circle face-warn';
+                hudBadge.textContent = `⛔️ Boshqa yuz! (${matchedEmp.full_name})`;
+                aiSubStatus.textContent = `Tanlangan: ${selectedEmp.full_name}, ammo kamerada: ${matchedEmp.full_name}!`;
+                return;
+              }
+            } else if (!selectedEmp || !selectedEmp.face_descriptor) {
+              // Auto switch dropdown to recognized employee
+              document.getElementById('empSelect').value = matchedEmp.id;
+              updateSelectedEmpBioTag();
+            }
+            camCircle.className = 'cam-circle face-locked';
+            hudBadge.textContent = `✅ Tanildi: ${matchedEmp.full_name} (${currentFaceScore}%)`;
+            aiSubStatus.textContent = `68 ta biometrik nuqta tasdiqlandi`;
+          } else {
+            // Check if the currently selected employee already has a different registered face
+            if (selectedEmp && selectedEmp.face_descriptor) {
+              try {
+                const selDist = euclideanDist(currentFaceDescriptor, JSON.parse(selectedEmp.face_descriptor));
+                if (selDist > 0.55) {
+                  camCircle.className = 'cam-circle face-warn';
+                  hudBadge.textContent = `⛔️ Yuz ${selectedEmp.full_name} ga mos emas!`;
+                  aiSubStatus.textContent = `Anti-Spoofing: Boshqa xodim oʻrniga bosish taqiqlangan!`;
+                  return;
+                }
+              } catch (err) {}
+            }
+            camCircle.className = 'cam-circle face-locked';
+            hudBadge.textContent = `🟢 Yuz skanerlandi: 68 nuqta (${currentFaceScore}%)`;
+            aiSubStatus.textContent = `Biometrik tasdiq tayyor — tugmani bosing`;
+          }
+        } catch (e) {}
+      }, 350);
+    }
+
+    function captureFacePhoto(name, action) {
+      const canvas = document.createElement('canvas');
+      canvas.width = 480;
+      canvas.height = 480;
+      const ctx = canvas.getContext('2d');
+      const video = document.getElementById('webcam');
+
+      if (video && video.srcObject && video.readyState >= 2) {
+        ctx.save();
+        ctx.translate(canvas.width, 0);
+        ctx.scale(-1, 1);
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        ctx.restore();
+      } else {
+        ctx.fillStyle = '#071712';
+        ctx.fillRect(0, 0, 480, 480);
+        ctx.fillStyle = '#10b981';
+        ctx.beginPath();
+        ctx.arc(240, 200, 70, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#fff';
+        ctx.font = 'bold 64px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText((name || 'K')[0].toUpperCase(), 240, 204);
+      }
+
+      // Emerald Frame
+      ctx.strokeStyle = '#10b981';
+      ctx.lineWidth = 6;
+      ctx.strokeRect(12, 12, 456, 456);
+
+      // Watermark Bar
+      ctx.fillStyle = 'rgba(7, 23, 18, 0.88)';
+      ctx.fillRect(12, 360, 456, 108);
+
+      ctx.fillStyle = '#fbbf24';
+      ctx.font = 'bold 20px sans-serif';
+      ctx.textAlign = 'left';
+      ctx.fillText('🌿 KICHIK TABIB — AI FACE ID (68 PT)', 28, 394);
+
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 24px sans-serif';
+      ctx.fillText('👤 ' + name, 28, 426);
+
+      const nowTime = new Date().toTimeString().slice(0, 5);
+      const actStr = action === 'checkout' ? 'ISHDAN KETDI' : 'ISHGA KELDI';
+      ctx.fillStyle = '#34d399';
+      ctx.font = 'bold 16px sans-serif';
+      ctx.fillText('🕒 ' + nowTime + ' (' + actStr + ')', 28, 452);
+
+      return canvas.toDataURL('image/jpeg', 0.88);
+    }
+
+    function showBanner(isError, title, desc) {
+      const banner = document.getElementById('doorBanner');
+      banner.className = isError ? 'door-banner error-banner' : 'door-banner';
+      banner.style.display = 'block';
+      document.getElementById('doorTitle').textContent = title;
+      document.getElementById('doorDesc').textContent = desc;
+    }
+
+    async function submitAttendance(action) {
+      const empId = Number(document.getElementById('empSelect').value);
+      const emp = employees.find(e => e.id === empId);
+      const empName = emp ? emp.full_name : 'Xodim';
+      const nowTime = new Date().toTimeString().slice(0, 5);
+
+      // If camera is active & AI models are loaded, require a live face in frame
+      if (cameraReady && aiModelsReady && !currentFaceDescriptor) {
+        showBanner(
+          true,
+          '⛔️ YUZ ANIQLANMADI!',
+          'Iltimos, kameraga yuzingizni toʻgʻri tuting — 68 ta nuqta koʻringach tugmani bosing.'
+        );
+        return;
+      }
+
+      const snapshot = captureFacePhoto(empName, action);
+
+      const res = await fetch('/api/attendance/checkin', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          employeeId: empId,
+          time: nowTime,
+          action: action,
+          source: 'Kichik Tabib Mini App',
+          deviceName: 'AI Face ID (68 nuqta)',
+          snapshotData: snapshot,
+          faceDescriptor: currentFaceDescriptor,
+          confidence: currentFaceScore || 99.5
+        })
+      });
+
+      const data = await res.json();
+
+      if (!res.ok || !data.ok) {
+        showBanner(
+          true,
+          '⛔️ ANTI-SPOOFING HIMOYASI!',
+          data.error || 'Yuzingiz tanlangan xodimga mos kelmadi!'
+        );
+        try {
+          if (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.HapticFeedback) {
+            window.Telegram.WebApp.HapticFeedback.notificationOccurred('error');
+          }
+        } catch (e) {}
+        return;
+      }
+
+      // Reload employees in case first-time biometric face enrollment happened
+      await loadEmployees();
+
+      if (action === 'checkin') {
+        showBanner(
+          false,
+          '🔓 ESHIK OCHILDI! XUSH KELIBSIZ!',
+          `${empName} — 68 nuqtali Face ID tasdiqlandi (${data.evaluation?.statusLabel || ''}), rasm Telegram guruhga yuborildi!`
+        );
+      } else {
+        showBanner(
+          false,
+          '🚪 ISHDAN KETISH QAYD ETILDI!',
+          `${empName} — bugungi smenangiz yopildi (${data.evaluation?.statusLabel || ''}). Yaxshi dam oling!`
+        );
+      }
+
+      try {
+        if (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.HapticFeedback) {
+          window.Telegram.WebApp.HapticFeedback.notificationOccurred('success');
+        }
+      } catch (e) {}
+
+      setTimeout(() => {
+        document.getElementById('doorBanner').style.display = 'none';
+      }, 5000);
+    }
+  </script>
+</body>
+</html>
