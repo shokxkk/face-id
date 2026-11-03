@@ -71,6 +71,11 @@ function sendJson(res, statusCode, data) {
 }
 
 function readRequestBody(req) {
+  if (req.body !== undefined && req.body !== null) {
+    if (typeof req.body === 'string') return Promise.resolve(req.body);
+    if (Buffer.isBuffer(req.body)) return Promise.resolve(req.body.toString('utf-8'));
+    if (typeof req.body === 'object') return Promise.resolve(JSON.stringify(req.body));
+  }
   return new Promise((resolve, reject) => {
     const chunks = [];
     let total = 0;
@@ -546,7 +551,8 @@ if (!process.env.VERCEL) {
 const appHandler = async (req, res) => {
   try {
     const parsedUrl = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
-    const pathname = parsedUrl.pathname;
+    let pathname = parsedUrl.searchParams.get('__path') || parsedUrl.pathname;
+    if (!pathname.startsWith('/')) pathname = '/' + pathname;
 
     if (req.method === 'OPTIONS') {
       sendJson(res, 200, { ok: true });
