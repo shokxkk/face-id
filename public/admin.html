@@ -37,6 +37,7 @@
       <a href="/" target="_blank" class="btn btn-purple">📱 Xodim Mini App (Oddiy oyna)</a>
       <button class="btn btn-success" onclick="exportExcel()">📥 Excel yuklab olish</button>
       <button class="btn btn-primary" onclick="sendMonthlyReport()">✈️ TG Guruhga oylik hisobot</button>
+      <button class="btn btn-danger" onclick="resetAllData()">🧹 Barcha maʼlumotlarni tozalash (Sbros)</button>
     </div>
   </header>
 
@@ -543,6 +544,18 @@
         alert(`✅ Telegram Bot va Mini App Vercel manziliga muvaffaqiyatli ulandi!\n\nWebhook: ${data.webhookUrl}`);
       } else {
         alert('Xatolik: ' + (data.error || 'Ulanmadi'));
+      }
+    }
+
+    async function resetAllData() {
+      if (!confirm("Barcha bugungi sinov davomatlari, jarimalar va test ma'lumotlarini 0 qilishni (tozalashni) xohlaysizmi?\n\nErtangi kundan toza davomat boshlanadi!")) return;
+      const res = await fetch('/api/attendance/reset-data', { method: 'POST' });
+      const data = await res.json();
+      if (data.ok) {
+        alert("✅ Barcha ma'lumotlar muvaffaqiyatli tozalandi! Ko'rsatkichlar 0 qilindi.");
+        loadDashboard();
+        loadEmployeesTable();
+        loadPayroll();
       }
     }
 
