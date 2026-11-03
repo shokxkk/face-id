@@ -1,0 +1,4 @@
+node_modules
+.gemini
+data/faceid_k4.sqlite-wal
+data/faceid_k4.sqlite-shm
