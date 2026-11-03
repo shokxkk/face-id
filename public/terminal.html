@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>FaceID Pro K4 — Face ID Kamera Terminali</title>
+  <link rel="stylesheet" href="/css/styles.css" />
+  <style>
+    .terminal-wrap {
+      max-width: 1180px;
+      margin: 20px auto;
+      padding: 0 20px;
+      display: grid;
+      grid-template-columns: 1.35fr 1fr;
+      gap: 22px;
+    }
+    @media (max-width: 900px) {
+      .terminal-wrap {
+        grid-template-columns: 1fr;
+      }
+    }
+    .camera-stage {
+      position: relative;
+      background: #000;
+      border-radius: 16px;
+      overflow: hidden;
+      border: 2px solid var(--primary);
+      aspect-ratio: 4 / 3;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .camera-stage video {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      transform: scaleX(-1);
+    }
+    .face-hud {
+      position: absolute;
+      width: 240px;
+      height: 280px;
+      border: 2px dashed rgba(56, 189, 248, 0.75);
+      border-radius: 36px;
+      box-shadow: 0 0 0 9999px rgba(11, 17, 32, 0.38);
+      pointer-events: none;
+      display: flex;
+      align-items: flex-end;
+      justify-content: center;
+      padding-bottom: 12px;
+      transition: all 0.25s ease;
+    }
+    .face-hud.scanning {
+      border-color: #34d399;
+      border-style: solid;
+      box-shadow: 0 0 30px rgba(16, 185, 129, 0.55), 0 0 0 9999px rgba(11, 17, 32, 0.38);
+    }
+    .scan-line {
+      position: absolute;
+      top: 15%;
+      left: 8%;
+      right: 8%;
+      height: 2px;
+      background: linear-gradient(90deg, transparent, #38bdf8, transparent);
+      animation: scanMove 2.4s infinite ease-in-out;
+    }
+    @keyframes scanMove {
+      0%, 100% { top: 12%; opacity: 0.4; }
+      50% { top: 86%; opacity: 1; }
+    }
+    .clock-banner {
+      position: absolute;
+      top: 14px;
+      left: 16px;
+      right: 16px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: rgba(15, 23, 42, 0.8);
+      backdrop-filter: blur(8px);
+      padding: 8px 14px;
+      border-radius: 10px;
+      border: 1px solid var(--border-highlight);
+    }
+    .digital-clock {
+      font-size: 22px;
+      font-weight: 800;
+      font-variant-numeric: tabular-nums;
+      color: #38bdf8;
+    }
+    .result-banner {
+      margin-top: 14px;
+      padding: 16px;
+      border-radius: 12px;
+      background: rgba(16, 185, 129, 0.12);
+      border: 1px solid var(--success);
+      display: none;
+    }
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <div class="brand-logo">📷</div>
+      <div>
+        <div class="brand-title">Face ID Terminal — Yuz orqali davomat</div>
+        <div class="brand-sub">Kompyuter web-kamerasi / Kirishdagi planshet / Telefon kamerasi</div>
+      </div>
+    </div>
+    <div class="quick-links">
+      <a href="/" class="btn btn-outline">⬅ Boshqaruv paneliga qaytish</a>
+      <a href="/webapp" class="btn btn-purple">📱 Mobil Telegram WebApp</a>
+    </div>
+  </header>
+
+  <div class="terminal-wrap">
+    <!-- Chap ustun: Kamera -->
+    <div class="card">
+      <div class="camera-stage">
+        <video id="termVideo" autoplay muted playsinline></video>
+        <div class="clock-banner">
+          <div>
+            <div style="font-size:11px; color:var(--text-muted)">KIRISH TERMINALI #1</div>
+            <div style="font-size:13px; font-weight:700" id="camStatusText">🟢 Kamera yoqilgan — yuzingizni qarating</div>
+          </div>
+          <div class="digital-clock" id="liveClock">09:00:00</div>
+        </div>
+        <div class="face-hud" id="faceHud">
+          <div class="scan-line"></div>
+          <span style="font-size:12px; background:rgba(0,0,0,0.65); padding:3px 10px; border-radius:99px; color:#e2e8f0;" id="hudCaption">
+            Face ID yuzni aniqlash hududi
+          </span>
+        </div>
+      </div>
+
+      <div style="display:flex; gap:10px; margin-top:14px; flex-wrap:wrap; justify-content:space-between; align-items:center;">
+        <div style="display:flex; gap:8px; flex-wrap:wrap;">
+          <button class="btn btn-success" onclick="scanFaceAndRecord('checkin')">✅ Yuzni tekshirish: ISHGA KELDIM</button>
+          <button class="btn btn-warning" onclick="scanFaceAndRecord('checkout')">🚪 Yuzni tekshirish: ISHDAN KETDIM</button>
+        </div>
+        <button class="btn btn-sm btn-outline" onclick="initTerminalCamera()">🔄 Kamerani yangilash</button>
+      </div>
+
+      <div class="result-banner" id="scanResultBox"></div>
+    </div>
+
+    <!-- O'ng ustun -->
+    <div>
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">👤 Xodimni aniqlash va vaqt</div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Aniqlangan xodim (yoki roʻyxatdan tanlang)</label>
+          <select id="termEmpSelect" class="form-control"></select>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Vaqt rejimi</label>
+          <select id="timeModeSelect" class="form-control" onchange="toggleCustomTime()">
+            <option value="custom">Tanlangan vaqt (08:30 bonus / 09:07 jarimasiz / 09:18 jarimani sinash)</option>
+            <option value="realtime">Hozirgi haqiqiy soat vaqti</option>
+          </select>
+        </div>
+
+        <div class="form-group" id="customTimeWrap">
+          <label class="form-label">Belgilash vaqti</label>
+          <input type="time" id="termCustomTime" class="form-control" value="08:30" />
+          <div style="display:flex; gap:6px; flex-wrap:wrap; margin-top:8px;">
+            <button class="btn btn-sm btn-purple" onclick="setTermTime('08:30')">08:30 (Bonus yoziladi)</button>
+            <button class="btn btn-sm btn-outline" onclick="setTermTime('09:00')">09:00 (Vaqtida)</button>
+            <button class="btn btn-sm btn-outline" onclick="setTermTime('09:07')">09:07 (7 min = Jarima yoʻq)</button>
+            <button class="btn btn-sm btn-warning" onclick="setTermTime('09:18')">09:18 (&gt;10 min = Jarima)</button>
+            <button class="btn btn-sm btn-success" onclick="setTermTime('18:00')">18:00 (Ishdan ketish)</button>
+          </div>
+        </div>
+
+        <hr style="border-color:var(--border-color); margin:16px 0;" />
+        <div class="card-title" style="font-size:14px; margin-bottom:10px;">Oxirgi terminaldan oʻtgan xodimlar</div>
+        <div id="termRecentList" style="display:flex; flex-direction:column; gap:8px; max-height:240px; overflow-y:auto;"></div>
+      </div>
+    </div>
+  </div>
+
+  <script src="/js/terminal.js"></script>
+</body>
+</html>
