@@ -689,8 +689,10 @@ const appHandler = async (req, res) => {
         let bestMatch = null;
         let bestDist = Infinity;
         for (const e of emps) {
+          if (typeof e.face_descriptor !== 'string' || e.face_descriptor.length < 50) continue;
           try {
             const desc = JSON.parse(e.face_descriptor);
+            if (!Array.isArray(desc) || desc.length !== 128) continue;
             const dist = euclideanDistance(body.faceDescriptor, desc);
             if (dist < bestDist) {
               bestDist = dist;
@@ -708,21 +710,23 @@ const appHandler = async (req, res) => {
         if (targetEmpId) {
           const chosenEmp = db.prepare(`SELECT * FROM employees WHERE id = ?`).get(Number(targetEmpId));
           if (chosenEmp) {
-            // 1) If chosen employee already has a registered face descriptor, verify match
-            if (chosenEmp.face_descriptor && chosenEmp.face_descriptor.length > 20) {
+            let validChosenDesc = null;
+            if (typeof chosenEmp.face_descriptor === 'string' && chosenEmp.face_descriptor.length > 50) {
               try {
-                const chosenDesc = JSON.parse(chosenEmp.face_descriptor);
-                const chosenDist = euclideanDistance(body.faceDescriptor, chosenDesc);
-                if (chosenDist > 0.55) {
-                  sendJson(res, 403, {
-                    ok: false,
-                    antiSpoofBlocked: true,
-                    error: `⛔️ DIQQAT! Yuzingiz ${chosenEmp.full_name} ga mos kelmadi! Boshqa odam oʻrniga belgilash taqiqlangan!`
-                  });
-                  return;
-                }
-              } catch {
-                // ignore parse issue
+                const parsed = JSON.parse(chosenEmp.face_descriptor);
+                if (Array.isArray(parsed) && parsed.length === 128) validChosenDesc = parsed;
+              } catch {}
+            }
+            // 1) If chosen employee already has a registered face descriptor, verify match
+            if (validChosenDesc) {
+              const chosenDist = euclideanDistance(body.faceDescriptor, validChosenDesc);
+              if (chosenDist > 0.55) {
+                sendJson(res, 403, {
+                  ok: false,
+                  antiSpoofBlocked: true,
+                  error: `⛔️ DIQQAT! Yuzingiz ${chosenEmp.full_name} ga mos kelmadi! Boshqa odam oʻrniga belgilash taqiqlangan!`
+                });
+                return;
               }
             } else {
               // 2) If chosen employee has NO face registered yet, check that this face isn't already registered to someone else
