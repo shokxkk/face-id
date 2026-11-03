@@ -327,7 +327,8 @@
       { id: 7, full_name: 'Muyassarxon', face_descriptor: '' },
       { id: 8, full_name: 'Malikaxon', face_descriptor: '' },
       { id: 9, full_name: 'Marjonaxon', face_descriptor: '' },
-      { id: 10, full_name: 'Durdonaxon', face_descriptor: '' }
+      { id: 10, full_name: 'Durdonaxon', face_descriptor: '' },
+      { id: 11, full_name: 'Shoxjaxon', face_descriptor: '' }
     ];
     let aiModelsReady = false;
     let currentFaceDescriptor = null;
@@ -344,12 +345,22 @@
       return Math.sqrt(sum);
     }
 
+    function getValidSavedDescriptor(emp) {
+      if (!emp || typeof emp.face_descriptor !== 'string' || emp.face_descriptor.length < 50) return null;
+      try {
+        const arr = JSON.parse(emp.face_descriptor);
+        return Array.isArray(arr) && arr.length === 128 ? arr : null;
+      } catch (e) {
+        return null;
+      }
+    }
+
     function updateSelectedEmpBioTag() {
       const sel = document.getElementById('empSelect');
       const empId = Number(sel.value);
       const emp = employees.find(e => e.id === empId);
       const bioTag = document.getElementById('bioTag');
-      if (emp && emp.face_descriptor && emp.face_descriptor.length > 20) {
+      if (getValidSavedDescriptor(emp)) {
         bioTag.textContent = '🔒 Face ID himoyalangan';
         bioTag.style.color = '#34d399';
       } else {
@@ -482,51 +493,48 @@
           let matchedEmp = null;
           let bestDist = Infinity;
           for (const e of employees) {
-            if (e.face_descriptor) {
-              try {
-                const savedDesc = JSON.parse(e.face_descriptor);
-                const d = euclideanDist(currentFaceDescriptor, savedDesc);
-                if (d < bestDist) {
-                  bestDist = d;
-                  matchedEmp = e;
-                }
-              } catch (err) {}
+            const savedDesc = getValidSavedDescriptor(e);
+            if (savedDesc) {
+              const d = euclideanDist(currentFaceDescriptor, savedDesc);
+              if (d < bestDist) {
+                bestDist = d;
+                matchedEmp = e;
+              }
             }
           }
 
           const selectedId = Number(document.getElementById('empSelect').value);
           const selectedEmp = employees.find(e => e.id === selectedId);
+          const selectedSavedDesc = getValidSavedDescriptor(selectedEmp);
 
           if (matchedEmp && bestDist <= 0.52) {
-            // Auto-select recognized employee if user hasn't locked onto someone else with no face
-            if (selectedEmp && selectedEmp.face_descriptor) {
-              const selDist = euclideanDist(currentFaceDescriptor, JSON.parse(selectedEmp.face_descriptor));
+            if (selectedSavedDesc) {
+              const selDist = euclideanDist(currentFaceDescriptor, selectedSavedDesc);
               if (selDist > 0.55) {
                 camCircle.className = 'cam-circle face-warn';
                 hudBadge.textContent = `⛔️ Boshqa yuz! (${matchedEmp.full_name})`;
                 aiSubStatus.textContent = `Tanlangan: ${selectedEmp.full_name}, ammo kamerada: ${matchedEmp.full_name}!`;
                 return;
               }
-            } else if (!selectedEmp || !selectedEmp.face_descriptor) {
-              // Auto switch dropdown to recognized employee
-              document.getElementById('empSelect').value = matchedEmp.id;
-              updateSelectedEmpBioTag();
+            } else if (matchedEmp.id !== selectedId) {
+              camCircle.className = 'cam-circle face-warn';
+              hudBadge.textContent = `⛔️ Kameradagi yuz: ${matchedEmp.full_name}!`;
+              aiSubStatus.textContent = `${selectedEmp ? selectedEmp.full_name : 'Boshqa xodim'} nomidan bosish taqiqlangan!`;
+              return;
             }
             camCircle.className = 'cam-circle face-locked';
             hudBadge.textContent = `✅ Tanildi: ${matchedEmp.full_name} (${currentFaceScore}%)`;
             aiSubStatus.textContent = `68 ta biometrik nuqta tasdiqlandi`;
           } else {
             // Check if the currently selected employee already has a different registered face
-            if (selectedEmp && selectedEmp.face_descriptor) {
-              try {
-                const selDist = euclideanDist(currentFaceDescriptor, JSON.parse(selectedEmp.face_descriptor));
-                if (selDist > 0.55) {
-                  camCircle.className = 'cam-circle face-warn';
-                  hudBadge.textContent = `⛔️ Yuz ${selectedEmp.full_name} ga mos emas!`;
-                  aiSubStatus.textContent = `Anti-Spoofing: Boshqa xodim oʻrniga bosish taqiqlangan!`;
-                  return;
-                }
-              } catch (err) {}
+            if (selectedSavedDesc) {
+              const selDist = euclideanDist(currentFaceDescriptor, selectedSavedDesc);
+              if (selDist > 0.55) {
+                camCircle.className = 'cam-circle face-warn';
+                hudBadge.textContent = `⛔️ Yuz ${selectedEmp.full_name} ga mos emas!`;
+                aiSubStatus.textContent = `Anti-Spoofing: Boshqa xodim oʻrniga bosish taqiqlangan!`;
+                return;
+              }
             }
             camCircle.className = 'cam-circle face-locked';
             hudBadge.textContent = `🟢 Yuz skanerlandi: 68 nuqta (${currentFaceScore}%)`;
