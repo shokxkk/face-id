@@ -6,6 +6,7 @@ const os = require('node:os');
 const {
   db,
   initDb,
+  resetAllAttendanceData,
   getSettingsMap,
   updateSettingsMap,
   getLocalTodayStr,
@@ -770,6 +771,12 @@ const appHandler = async (req, res) => {
       });
 
       sendJson(res, 200, { ok: true, ...result });
+      return;
+    }
+
+    if (pathname === '/api/attendance/reset-data' && req.method === 'POST') {
+      const resData = resetAllAttendanceData();
+      sendJson(res, 200, { ok: true, message: 'Barcha davomat, jarima va test maʼlumotlari 0 qilindi (tozalandi)', ...resData });
       return;
     }
 
