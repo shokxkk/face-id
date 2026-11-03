@@ -1,0 +1,554 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Kichik Tabib — Boshqaruv va HR Paneli</title>
+  <link rel="stylesheet" href="/css/styles.css" />
+  <style>
+    :root {
+      --bg-body: #071712;
+      --bg-card: #0d261e;
+      --bg-card-hover: #13352a;
+      --border-color: rgba(16, 185, 129, 0.22);
+      --primary: #10b981;
+      --gold: #fbbf24;
+    }
+    .brand-logo-img {
+      width: 44px;
+      height: 44px;
+      border-radius: 12px;
+      object-fit: cover;
+      background: #fff;
+      padding: 2px;
+    }
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <img src="/logo.png" alt="Kichik Tabib" class="brand-logo-img" />
+      <div>
+        <div class="brand-title">Kichik Tabib — Rahbariyat va Admin Paneli</div>
+        <div class="brand-sub">Xodimlarni boshqarish, davomat, jarima, bonus va oylik hisoboti</div>
+      </div>
+    </div>
+    <div class="quick-links">
+      <a href="/" target="_blank" class="btn btn-purple">📱 Xodim Mini App (Oddiy oyna)</a>
+      <button class="btn btn-success" onclick="exportExcel()">📥 Excel yuklab olish</button>
+      <button class="btn btn-primary" onclick="sendMonthlyReport()">✈️ TG Guruhga oylik hisobot</button>
+    </div>
+  </header>
+
+  <main class="container">
+    <div class="nav-tabs">
+      <button class="tab-btn active" onclick="switchTab('today', this)">📊 Bugungi Davomat va Jarimalar</button>
+      <button class="tab-btn" onclick="switchTab('employees', this)">👥 Xodimlarni Boshqarish (Qoʻshish / Oʻchirish / Tahrirlash)</button>
+      <button class="tab-btn" onclick="switchTab('payroll', this)">💰 Oylik va Tabel Hisob-Kitobi</button>
+      <button class="tab-btn" onclick="switchTab('settings', this)">⚙️ Qoidalar va Telegram Guruh Sozlamalari</button>
+    </div>
+
+    <!-- 1. BUGUNGI DAVOMAT VA JARIMALAR -->
+    <section id="tab-today" class="tab-pane active">
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-label">Bugun ishga kelganlar</div>
+          <div class="stat-value" id="stPresent" style="color:#34d399">0 / 10</div>
+          <div class="stat-sub">Jami xodimlar</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Erta kelganlar (08:30–09:00)</div>
+          <div class="stat-value" id="stEarly" style="color:#fbbf24">0 kishi</div>
+          <div class="stat-sub" id="stEarlySum">Bonus: +0 so'm</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">5–10 min (Jarimasiz)</div>
+          <div class="stat-value" id="stGrace" style="color:#38bdf8">0 kishi</div>
+          <div class="stat-sub">09:10 gacha — 0 so'm</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Kech qolganlar (&gt;10 min)</div>
+          <div class="stat-value" id="stLate" style="color:#f87171">0 kishi</div>
+          <div class="stat-sub" id="stLateSum">Jarima: -0 so'm</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Ishga kelmaganlar</div>
+          <div class="stat-value" id="stAbsent" style="color:#ef4444">0 kishi</div>
+          <div class="stat-sub" id="stAbsentSum">Ayrildi: -0 so'm</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">📋 Bugungi jonli roʻyxat (<span id="todayLabel"></span>)</div>
+          <button class="btn btn-sm btn-outline" onclick="loadDashboard()">🔄 Yangilash</button>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Xodim</th>
+                <th>Oylik okladi</th>
+                <th>Kelgan vaqti</th>
+                <th>Ketgan vaqti</th>
+                <th>Ishlagan soati</th>
+                <th>Davomat holati</th>
+                <th>Bonus / Jarima / Ayrilma</th>
+              </tr>
+            </thead>
+            <tbody id="todayTableBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- 2. XODIMLARNI BOSHQARISH -->
+    <section id="tab-employees" class="tab-pane">
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">👥 Barcha xodimlar roʻyxati</div>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>F.I.Sh.</th>
+                  <th>Lavozimi</th>
+                  <th>Oylik okladi</th>
+                  <th>Telefon</th>
+                  <th>Amallar</th>
+                </tr>
+              </thead>
+              <tbody id="empTableBody"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title" id="formTitle">➕ Yangi xodim qoʻshish</div>
+            <button class="btn btn-sm btn-outline" id="btnCancelEdit" style="display:none;" onclick="cancelEdit()">Bekor qilish</button>
+          </div>
+          <form onsubmit="saveEmployee(event)">
+            <input type="hidden" id="editEmpId" value="" />
+            <div class="form-group">
+              <label class="form-label">Xodim ismi va familiyasi *</label>
+              <input type="text" id="fName" class="form-control" placeholder="Masalan: Sardorbek" required />
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label class="form-label">Lavozimi *</label>
+                <input type="text" id="fPos" class="form-control" value="Xodim" required />
+              </div>
+              <div class="form-group">
+                <label class="form-label">Oylik okladi (so'm) *</label>
+                <input type="number" id="fSalary" class="form-control" value="2000000" step="50000" required />
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label class="form-label">Telefon raqami</label>
+                <input type="text" id="fPhone" class="form-control" placeholder="+998 90 123 45 67" />
+              </div>
+              <div class="form-group">
+                <label class="form-label">Telegram username yoki ID</label>
+                <input type="text" id="fTg" class="form-control" placeholder="@username" />
+              </div>
+            </div>
+            <button type="submit" class="btn btn-success" style="width:100%" id="btnSaveEmp">💾 Xodimni saqlash</button>
+          </form>
+        </div>
+      </div>
+    </section>
+
+    <!-- 3. OYLIK VA TABEL -->
+    <section id="tab-payroll" class="tab-pane">
+      <div class="card">
+        <div class="card-header">
+          <div>
+            <div class="card-title">💰 Oylik va Tabel Hisoboti (Oy oxirida qoʻlga tegadigan summa)</div>
+            <p style="font-size:12px; color:var(--text-muted); margin-top:4px;">
+              Formula: Oklad - Kelmagan kunlar ayrilmasi + 08:30 bonusi + KPI - Kechikish jarimasi - Avans = <b>Qoʻlga tegishi</b>
+            </p>
+          </div>
+          <div style="display:flex; gap:10px; align-items:center;">
+            <input type="month" id="payrollMonth" class="form-control" style="width:160px;" onchange="loadPayroll()" />
+            <button class="btn btn-success" onclick="exportExcel()">📥 Excel (.CSV)</button>
+          </div>
+        </div>
+
+        <div class="stats-grid" id="payrollStatsGrid"></div>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Xodim</th>
+                <th>Okladi</th>
+                <th>Keldi</th>
+                <th>Kelmadi</th>
+                <th>08:30 Erta bonus</th>
+                <th>5-10m jarimasiz</th>
+                <th>Jarima (&gt;10m)</th>
+                <th>Avans</th>
+                <th>QOʻLGA TEGADIGAN OYLIK</th>
+              </tr>
+            </thead>
+            <tbody id="payrollTableBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- 4. QOIDALAR VA SOZLAMALAR -->
+    <section id="tab-settings" class="tab-pane">
+      <div class="grid-equal">
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">⚙️ Ish vaqti, Bonus va Jarima qoidalari</div>
+          </div>
+          <form onsubmit="saveCompanySettings(event)">
+            <div class="form-row">
+              <div class="form-group">
+                <label class="form-label">Ish boshlanish vaqti</label>
+                <input type="time" id="sWorkStart" class="form-control" value="09:00" />
+              </div>
+              <div class="form-group">
+                <label class="form-label">Ish tugash vaqti</label>
+                <input type="time" id="sWorkEnd" class="form-control" value="18:00" />
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label class="form-label">Jarimasiz imtiyozli vaqt (daqiqa)</label>
+                <input type="number" id="sGrace" class="form-control" value="10" />
+                <small style="color:var(--text-muted)">09:01–09:10 oraligʻi = 0 so'm jarima</small>
+              </div>
+              <div class="form-group">
+                <label class="form-label">10 daqiqadan oshsa har 1 daqiqaga jarima (so'm)</label>
+                <input type="number" id="sPenalty" class="form-control" value="1000" step="100" />
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label class="form-label">Erta kelish bonusi boshlanishi (08:30)</label>
+                <input type="time" id="sEarlyStart" class="form-control" value="08:30" />
+              </div>
+              <div class="form-group">
+                <label class="form-label">09:00 gacha har 1 daqiqa bonusi (so'm)</label>
+                <input type="number" id="sEarlyRate" class="form-control" value="1000" step="100" />
+              </div>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Oydagi ish kunlari soni (kelmagan kun uchun oklad boʻlinadi)</label>
+              <input type="number" id="sDays" class="form-control" value="26" min="1" max="31" />
+            </div>
+            <button type="submit" class="btn btn-success">💾 Qoidalarni saqlash</button>
+          </form>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">✈️ Telegram Guruh va Bot Sozlamalari</div>
+          </div>
+          <div style="background:var(--bg-card-hover); padding:14px; border-radius:12px; font-size:13px; line-height:1.6; margin-bottom:14px;">
+            <b>Guruhga qanday ulanadi:</b><br/>
+            1. Oʻzingizning Telegram guruhingizga <b>@faceid_kichiktabibbot</b> ni qoʻshing.<br/>
+            2. Guruhda <code>/start</code> yoki <code>/group</code> deb yozing.<br/>
+            3. Bot avtomatik ravishda guruhni ulab oladi va barcha Face ID rasmlari shu guruhga tusha boshlaydi!
+          </div>
+          <form onsubmit="saveTgSettings(event)">
+            <div class="form-group">
+              <label class="form-label">Telegram Guruh Chat ID (masalan: -100...)</label>
+              <input type="text" id="sTgGroup" class="form-control" placeholder="-100..." />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Telegram Bot Token</label>
+              <input type="text" id="sTgToken" class="form-control" />
+            </div>
+            <button type="submit" class="btn btn-primary">💾 Telegram ID ni saqlash</button>
+            <button type="button" class="btn btn-success" style="margin-left:8px;" onclick="activateVercelWebhook()">🌐 Vercel Webhook va Mini App ni ulash</button>
+          </form>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    function formatMoney(n) {
+      return Number(n || 0).toLocaleString('ru-RU') + " so'm";
+    }
+
+    function switchTab(id, btn) {
+      document.querySelectorAll('.tab-pane').forEach(el => el.classList.remove('active'));
+      document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+      document.getElementById('tab-' + id).classList.add('active');
+      if (btn) btn.classList.add('active');
+
+      if (id === 'today') loadDashboard();
+      if (id === 'employees') loadEmployeesTable();
+      if (id === 'payroll') loadPayroll();
+      if (id === 'settings') loadSettingsForm();
+    }
+
+    // 1. DASHBOARD / TODAY
+    async function loadDashboard() {
+      const res = await fetch('/api/dashboard');
+      const data = await res.json();
+      document.getElementById('todayLabel').textContent = data.today;
+
+      const st = data.stats;
+      document.getElementById('stPresent').textContent = `${st.countPresent} / ${st.totalEmployees}`;
+      document.getElementById('stEarly').textContent = `${st.countEarlyBonus} kishi`;
+      document.getElementById('stEarlySum').textContent = `Bonus: +${formatMoney(st.todayBonusesSum)}`;
+      document.getElementById('stGrace').textContent = `${st.countGraceLate} kishi`;
+      document.getElementById('stLate').textContent = `${st.countPenalizedLate} kishi`;
+      document.getElementById('stLateSum').textContent = `Jarima: -${formatMoney(st.todayPenaltiesSum)}`;
+      document.getElementById('stAbsent').textContent = `${st.countAbsent} kishi`;
+      document.getElementById('stAbsentSum').textContent = `Ayrildi: -${formatMoney(st.todayAbsenceDeductionsSum)}`;
+
+      const tbody = document.getElementById('todayTableBody');
+      tbody.innerHTML = data.liveRows.map(r => {
+        const ev = r.evaluation;
+        let fin = '<span style="color:#34d399; font-weight:700;">0 so\'m</span>';
+        if (ev.earlyBonusAmount > 0) fin = `<span style="color:#fbbf24; font-weight:800;">+${formatMoney(ev.earlyBonusAmount)}</span>`;
+        if (ev.penaltyAmount > 0) fin = `<span style="color:#f87171; font-weight:800;">-${formatMoney(ev.penaltyAmount)}</span>`;
+        if (ev.absenceDeduction > 0) fin = `<span style="color:#f87171; font-weight:800;">-${formatMoney(ev.absenceDeduction)}</span>`;
+
+        return `
+          <tr>
+            <td><b>${r.employee.full_name}</b><br/><small style="color:var(--text-muted)">${r.employee.position}</small></td>
+            <td>${formatMoney(r.employee.base_salary)}</td>
+            <td><b>${r.record.check_in || '—'}</b></td>
+            <td><b>${r.record.check_out || '—'}</b></td>
+            <td>${ev.isPresent ? ev.workedHours + ' soat' : '0 soat'}</td>
+            <td><span class="badge ${ev.isPresent ? 'badge-success' : 'badge-danger'}">${ev.statusLabel}</span></td>
+            <td>${fin}</td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    // 2. EMPLOYEES CRUD
+    let employeesList = [];
+    async function loadEmployeesTable() {
+      const res = await fetch('/api/employees');
+      const data = await res.json();
+      employeesList = data.employees || [];
+
+      const tbody = document.getElementById('empTableBody');
+      tbody.innerHTML = employeesList.map(e => {
+        const hasFace = e.face_descriptor && e.face_descriptor.length > 20;
+        const faceBadge = hasFace
+          ? `<span class="badge badge-success">🔒 68-nuqta Face ID</span>`
+          : `<span class="badge badge-cyan">🆕 1-kirishda saqlanadi</span>`;
+        return `
+        <tr>
+          <td><b>${e.full_name}</b><br/>${faceBadge}</td>
+          <td>${e.position}</td>
+          <td style="color:#34d399; font-weight:700;">${formatMoney(e.base_salary)}</td>
+          <td>${e.phone || '—'}</td>
+          <td>
+            <button class="btn btn-sm btn-outline" onclick="editEmp(${e.id})">✏️ Tahrirlash</button>
+            ${hasFace ? `<button class="btn btn-sm btn-outline" onclick="resetEmpFace(${e.id}, '${e.full_name}')">🔄 Yuzni yangilash</button>` : ''}
+            <button class="btn btn-sm btn-danger" onclick="deleteEmp(${e.id}, '${e.full_name}')">🗑 Oʻchirish</button>
+          </td>
+        </tr>
+      `}).join('');
+    }
+
+    async function resetEmpFace(id, name) {
+      if (!confirm(`${name} ning Face ID biometrik ma'lumotini tozalab, qayta skanerlashga ruxsat berasizmi?`)) return;
+      await fetch(`/api/employees/${id}/face`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ faceDescriptor: null, facePhoto: '' })
+      });
+      await loadEmployeesTable();
+      alert(`✅ ${name} ning Face ID ma'lumoti yangilandi! Keyingi kirishda yangi yuzi saqlanadi.`);
+    }
+
+    function editEmp(id) {
+      const e = employeesList.find(x => x.id === id);
+      if (!e) return;
+      document.getElementById('editEmpId').value = e.id;
+      document.getElementById('fName').value = e.full_name;
+      document.getElementById('fPos').value = e.position;
+      document.getElementById('fSalary').value = e.base_salary;
+      document.getElementById('fPhone').value = e.phone || '';
+      document.getElementById('fTg').value = e.telegram_username || '';
+
+      document.getElementById('formTitle').textContent = `✏️ Tahrirlash: ${e.full_name}`;
+      document.getElementById('btnSaveEmp').textContent = '💾 Oʻzgarishlarni saqlash';
+      document.getElementById('btnCancelEdit').style.display = 'inline-block';
+    }
+
+    function cancelEdit() {
+      document.getElementById('editEmpId').value = '';
+      document.getElementById('fName').value = '';
+      document.getElementById('fPos').value = 'Xodim';
+      document.getElementById('fSalary').value = '2000000';
+      document.getElementById('fPhone').value = '';
+      document.getElementById('fTg').value = '';
+
+      document.getElementById('formTitle').textContent = '➕ Yangi xodim qoʻshish';
+      document.getElementById('btnSaveEmp').textContent = '💾 Xodimni saqlash';
+      document.getElementById('btnCancelEdit').style.display = 'none';
+    }
+
+    async function saveEmployee(event) {
+      event.preventDefault();
+      const editId = document.getElementById('editEmpId').value;
+      const payload = {
+        id: editId ? Number(editId) : undefined,
+        full_name: document.getElementById('fName').value,
+        position: document.getElementById('fPos').value,
+        base_salary: Number(document.getElementById('fSalary').value),
+        phone: document.getElementById('fPhone').value,
+        telegram_username: document.getElementById('fTg').value
+      };
+
+      await fetch('/api/employees', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      cancelEdit();
+      await loadEmployeesTable();
+      alert('✅ Xodim muvaffaqiyatli saqlandi!');
+    }
+
+    async function deleteEmp(id, name) {
+      if (!confirm(`${name} ni roʻyxatdan oʻchirishni xohlaysizmi?`)) return;
+      await fetch(`/api/employees/${id}`, { method: 'DELETE' });
+      await loadEmployeesTable();
+    }
+
+    // 3. PAYROLL
+    async function loadPayroll() {
+      const ym = document.getElementById('payrollMonth').value || new Date().toISOString().slice(0,7);
+      document.getElementById('payrollMonth').value = ym;
+
+      const res = await fetch(`/api/payroll?month=${ym}`);
+      const data = await res.json();
+
+      const t = data.totals;
+      document.getElementById('payrollStatsGrid').innerHTML = `
+        <div class="stat-card">
+          <div class="stat-label">Jami Oklad</div>
+          <div class="stat-value">${formatMoney(t.baseSalary)}</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Kelmaganlik ayrilmasi</div>
+          <div class="stat-value" style="color:#f87171">-${formatMoney(t.absenceDeduction)}</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Erta bonus (8:30)</div>
+          <div class="stat-value" style="color:#fbbf24">+${formatMoney(t.earlyBonus)}</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Jarima (>10m)</div>
+          <div class="stat-value" style="color:#f87171">-${formatMoney(t.latePenalty)}</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">QOʻLGA TEGADIGAN JAMI OYLIK</div>
+          <div class="stat-value" style="color:#34d399">${formatMoney(t.finalToPay)}</div>
+        </div>
+      `;
+
+      const tbody = document.getElementById('payrollTableBody');
+      tbody.innerHTML = data.payrolls.map(p => `
+        <tr>
+          <td><b>${p.employee.full_name}</b></td>
+          <td>${formatMoney(p.employee.base_salary)}</td>
+          <td><span class="badge badge-success">${p.daysPresent} kun</span></td>
+          <td><span class="badge ${p.daysAbsent > 0 ? 'badge-danger' : 'badge-cyan'}">${p.daysAbsent} kun (-${formatMoney(p.totalAbsenceDeduction)})</span></td>
+          <td style="color:#fbbf24; font-weight:700;">+${formatMoney(p.totalEarlyBonusAmount)}</td>
+          <td>${p.daysGraceLate} marta (0 so'm)</td>
+          <td style="color:#f87171; font-weight:700;">-${formatMoney(p.totalLatePenaltyAmount)}</td>
+          <td>-${formatMoney(p.totalAdvanceAmount)}</td>
+          <td style="color:#34d399; font-weight:900; font-size:15px;">${formatMoney(p.finalToPay)}</td>
+        </tr>
+      `).join('');
+    }
+
+    function exportExcel() {
+      const ym = document.getElementById('payrollMonth').value || '';
+      window.location.href = `/api/payroll/export?month=${ym}`;
+    }
+
+    async function sendMonthlyReport() {
+      const ym = document.getElementById('payrollMonth').value || '';
+      await fetch('/api/telegram/send-monthly-report', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ month: ym })
+      });
+      alert('✈️ Oylik hisobot Telegram guruhga yuborildi!');
+    }
+
+    // 4. SETTINGS
+    async function loadSettingsForm() {
+      const res = await fetch('/api/settings');
+      const data = await res.json();
+      const s = data.settings || {};
+      document.getElementById('sWorkStart').value = s.work_start_time || '09:00';
+      document.getElementById('sWorkEnd').value = s.work_end_time || '18:00';
+      document.getElementById('sGrace').value = s.grace_period_minutes || '10';
+      document.getElementById('sPenalty').value = s.penalty_per_minute || '1000';
+      document.getElementById('sEarlyStart').value = s.early_bonus_start_time || '08:30';
+      document.getElementById('sEarlyRate').value = s.early_bonus_per_minute || '1000';
+      document.getElementById('sDays').value = s.working_days_per_month || '26';
+      document.getElementById('sTgGroup').value = s.telegram_group_chat_id || '';
+      document.getElementById('sTgToken').value = s.telegram_bot_token || '';
+    }
+
+    async function saveCompanySettings(e) {
+      e.preventDefault();
+      await fetch('/api/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          work_start_time: document.getElementById('sWorkStart').value,
+          work_end_time: document.getElementById('sWorkEnd').value,
+          grace_period_minutes: document.getElementById('sGrace').value,
+          penalty_per_minute: document.getElementById('sPenalty').value,
+          early_bonus_start_time: document.getElementById('sEarlyStart').value,
+          early_bonus_per_minute: document.getElementById('sEarlyRate').value,
+          working_days_per_month: document.getElementById('sDays').value
+        })
+      });
+      alert('✅ Qoidalar saqlandi!');
+    }
+
+    async function saveTgSettings(e) {
+      e.preventDefault();
+      await fetch('/api/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          telegram_group_chat_id: document.getElementById('sTgGroup').value.trim(),
+          telegram_bot_token: document.getElementById('sTgToken').value.trim()
+        })
+      });
+      alert('✅ Telegram sozlamalari saqlandi!');
+    }
+
+    async function activateVercelWebhook() {
+      const res = await fetch('/api/telegram/setup-webhook');
+      const data = await res.json();
+      if (data.ok) {
+        alert(`✅ Telegram Bot va Mini App Vercel manziliga muvaffaqiyatli ulandi!\n\nWebhook: ${data.webhookUrl}`);
+      } else {
+        alert('Xatolik: ' + (data.error || 'Ulanmadi'));
+      }
+    }
+
+    window.addEventListener('DOMContentLoaded', () => {
+      loadDashboard();
+    });
+  </script>
+</body>
+</html>
