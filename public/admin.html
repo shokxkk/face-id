@@ -95,6 +95,7 @@
                 <th>Ishlagan soati</th>
                 <th>Davomat holati</th>
                 <th>Bonus / Jarima / Ayrilma</th>
+                <th>Boshqarish</th>
               </tr>
             </thead>
             <tbody id="todayTableBody"></tbody>
@@ -326,9 +327,31 @@
             <td>${ev.isPresent ? ev.workedHours + ' soat' : '0 soat'}</td>
             <td><span class="badge ${ev.isPresent ? 'badge-success' : 'badge-danger'}">${ev.statusLabel}</span></td>
             <td>${fin}</td>
+            <td>
+              <button class="btn btn-sm btn-outline" onclick="manualCheckIn(${r.employee.id}, '${r.employee.full_name}', '${r.record.check_in || '09:00'}')">✏️ Vaqt</button>
+            </td>
           </tr>
         `;
       }).join('');
+    }
+
+    async function manualCheckIn(empId, empName, defaultTime) {
+      const timeStr = prompt(`${empName} ning bugungi kelgan vaqtini kiriting (masalan 09:00 yoki 09:15).\nAgar "kelmadi" qilmoqchi bo'lsangiz, bo'sh qoldiring:`, defaultTime || '09:00');
+      if (timeStr === null) return;
+      const trimmed = timeStr.trim();
+      const action = trimmed === '' ? 'absent' : 'checkin';
+      await fetch('/api/attendance/checkin', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          employeeId: empId,
+          time: trimmed || '09:00',
+          action: action,
+          source: 'Admin Panel',
+          deviceName: 'Rahbar tomonidan'
+        })
+      });
+      await loadDashboard();
     }
 
     // 2. EMPLOYEES CRUD
