@@ -359,8 +359,13 @@
     function updateSelectedEmpBioTag() {
       const sel = document.getElementById('empSelect');
       const empId = Number(sel.value);
-      const emp = employees.find(e => e.id === empId);
       const bioTag = document.getElementById('bioTag');
+      if (!empId) {
+        bioTag.textContent = '👆 Roʻyxatdan tanlang yoki kameraga qarang';
+        bioTag.style.color = '#fbbf24';
+        return;
+      }
+      const emp = employees.find(e => e.id === empId);
       if (getValidSavedDescriptor(emp)) {
         bioTag.textContent = '🔒 Face ID himoyalangan';
         bioTag.style.color = '#34d399';
@@ -373,9 +378,15 @@
     function renderEmployeesDropdown() {
       const sel = document.getElementById('empSelect');
       const prevVal = sel.value;
-      sel.innerHTML = employees.map(e => `<option value="${e.id}">${e.full_name}</option>`).join('');
-      if (prevVal && employees.some(e => String(e.id) === String(prevVal))) {
+      const defaultOpt = `<option value="0">— 👤 Oʻz ismingizni tanlang —</option>`;
+      sel.innerHTML = defaultOpt + employees.map(e => {
+        const hasFace = getValidSavedDescriptor(e) ? ' 🔒' : '';
+        return `<option value="${e.id}">${e.full_name}${hasFace}</option>`;
+      }).join('');
+      if (prevVal && prevVal !== '0' && employees.some(e => String(e.id) === String(prevVal))) {
         sel.value = prevVal;
+      } else {
+        sel.value = '0';
       }
       updateSelectedEmpBioTag();
     }
@@ -504,11 +515,19 @@
             }
           }
 
-          const selectedId = Number(document.getElementById('empSelect').value);
+          let selectedId = Number(document.getElementById('empSelect').value);
+
+          // Auto-select recognized employee when dropdown is at "0" (not selected yet)
+          if (matchedEmp && bestDist <= 0.54 && selectedId === 0) {
+            document.getElementById('empSelect').value = String(matchedEmp.id);
+            selectedId = matchedEmp.id;
+            updateSelectedEmpBioTag();
+          }
+
           const selectedEmp = employees.find(e => e.id === selectedId);
           const selectedSavedDesc = getValidSavedDescriptor(selectedEmp);
 
-          if (matchedEmp && bestDist <= 0.52) {
+          if (matchedEmp && bestDist <= 0.54) {
             if (selectedSavedDesc) {
               const selDist = euclideanDist(currentFaceDescriptor, selectedSavedDesc);
               if (selDist > 0.55) {
@@ -517,7 +536,7 @@
                 aiSubStatus.textContent = `Tanlangan: ${selectedEmp.full_name}, ammo kamerada: ${matchedEmp.full_name}!`;
                 return;
               }
-            } else if (matchedEmp.id !== selectedId) {
+            } else if (selectedId !== 0 && matchedEmp.id !== selectedId) {
               camCircle.className = 'cam-circle face-warn';
               hudBadge.textContent = `⛔️ Kameradagi yuz: ${matchedEmp.full_name}!`;
               aiSubStatus.textContent = `${selectedEmp ? selectedEmp.full_name : 'Boshqa xodim'} nomidan bosish taqiqlangan!`;
@@ -608,20 +627,56 @@
     }
 
     async function submitAttendance(action) {
-      const empId = Number(document.getElementById('empSelect').value);
-      const emp = employees.find(e => e.id === empId);
-      const empName = emp ? emp.full_name : 'Xodim';
-      const nowTime = new Date().toTimeString().slice(0, 5);
+      let empId = Number(document.getElementById('empSelect').value);
+      const video = document.getElementById('webcam');
 
-      // If camera is active & AI models are loaded, require a live face in frame
-      if (cameraReady && aiModelsReady && !currentFaceDescriptor) {
+      // On-the-spot face detection if descriptor wasn't locked yet
+      if (cameraReady && aiModelsReady && !currentFaceDescriptor && video && video.readyState >= 2) {
+        try {
+          const det = await faceapi
+            .detectSingleFace(video, new faceapi.TinyFaceDetectorOptions({ inputSize: 224, scoreThreshold: 0.4 }))
+            .withFaceLandmarks()
+            .withFaceDescriptor();
+          if (det && det.descriptor) {
+            currentFaceDescriptor = Array.from(det.descriptor);
+            currentFaceScore = Math.round(det.detection.score * 100);
+          }
+        } catch (e) {}
+      }
+
+      // If user hasn't picked a name from dropdown, try matching face descriptor automatically
+      if (!empId && currentFaceDescriptor) {
+        let bestEmp = null;
+        let bestDist = Infinity;
+        for (const e of employees) {
+          const savedDesc = getValidSavedDescriptor(e);
+          if (savedDesc) {
+            const d = euclideanDist(currentFaceDescriptor, savedDesc);
+            if (d < bestDist) {
+              bestDist = d;
+              bestEmp = e;
+            }
+          }
+        }
+        if (bestEmp && bestDist <= 0.54) {
+          empId = bestEmp.id;
+          document.getElementById('empSelect').value = String(empId);
+          updateSelectedEmpBioTag();
+        }
+      }
+
+      if (!empId) {
         showBanner(
           true,
-          '⛔️ YUZ ANIQLANMADI!',
-          'Iltimos, kameraga yuzingizni toʻgʻri tuting — 68 ta nuqta koʻringach tugmani bosing.'
+          '👤 ISMINGIZNI TANLANG!',
+          '1-marta yuzingizni Face ID ga biriktirish uchun yuqoridagi roʻyxatdan oʻz ismingizni tanlang va tugmani bosing.'
         );
         return;
       }
+
+      const emp = employees.find(e => e.id === empId);
+      const empName = emp ? emp.full_name : 'Xodim';
+      const nowTime = new Date().toTimeString().slice(0, 5);
 
       const snapshot = captureFacePhoto(empName, action);
 
