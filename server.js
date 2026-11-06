@@ -6,6 +6,8 @@ const os = require('node:os');
 const {
   db,
   initDb,
+  syncFromCloudDb,
+  syncToCloudDb,
   resetAllAttendanceData,
   getSettingsMap,
   updateSettingsMap,
@@ -560,6 +562,10 @@ const appHandler = async (req, res) => {
       return;
     }
 
+    if (pathname.startsWith('/api/')) {
+      await syncFromCloudDb();
+    }
+
     if (pathname === '/api/dashboard' && req.method === 'GET') {
       const dateParam = parsedUrl.searchParams.get('date') || getLocalTodayStr();
       const data = getTodayDashboardData(dateParam);
@@ -770,12 +776,14 @@ const appHandler = async (req, res) => {
         confidence: body.confidence || 99.5
       });
 
+      await syncToCloudDb(true);
       sendJson(res, 200, { ok: true, ...result });
       return;
     }
 
     if (pathname === '/api/attendance/reset-data' && req.method === 'POST') {
       const resData = resetAllAttendanceData();
+      await syncToCloudDb(true);
       sendJson(res, 200, { ok: true, message: 'Barcha davomat, jarima va test maʼlumotlari 0 qilindi (tozalandi)', ...resData });
       return;
     }
@@ -823,6 +831,7 @@ const appHandler = async (req, res) => {
         confidence: 99.8
       });
 
+      await syncToCloudDb(true);
       sendJson(res, 200, { ok: true, hikvisionParsed: parsed, ...result });
       return;
     }
@@ -855,6 +864,7 @@ const appHandler = async (req, res) => {
           body.telegram_username || '',
           Number(body.id)
         );
+        await syncToCloudDb(true);
         const updated = db.prepare(`SELECT * FROM employees WHERE id = ?`).get(Number(body.id));
         sendJson(res, 200, { ok: true, employee: updated });
         return;
@@ -891,6 +901,7 @@ const appHandler = async (req, res) => {
         body.face_photo || ''
       );
 
+      await syncToCloudDb(true);
       const created = db.prepare(`SELECT * FROM employees WHERE id = ?`).get(info.lastInsertRowid);
       sendJson(res, 201, { ok: true, employee: created });
       return;
@@ -913,6 +924,7 @@ const appHandler = async (req, res) => {
         empId
       );
 
+      await syncToCloudDb(true);
       const updated = db.prepare(`SELECT * FROM employees WHERE id = ?`).get(empId);
       sendJson(res, 200, { ok: true, employee: updated });
       return;
@@ -921,6 +933,7 @@ const appHandler = async (req, res) => {
     if (pathname.startsWith('/api/employees/') && req.method === 'DELETE') {
       const empId = Number(pathname.split('/')[3]);
       db.prepare(`DELETE FROM employees WHERE id = ?`).run(empId);
+      await syncToCloudDb(true);
       sendJson(res, 200, { ok: true });
       return;
     }
@@ -977,6 +990,7 @@ const appHandler = async (req, res) => {
         });
       }
 
+      await syncToCloudDb(true);
       sendJson(res, 201, { ok: true });
       return;
     }
@@ -996,6 +1010,7 @@ const appHandler = async (req, res) => {
         Number(body.amount || 200000),
         body.comment || 'KPI mukofoti'
       );
+      await syncToCloudDb(true);
       sendJson(res, 201, { ok: true });
       return;
     }
@@ -1012,6 +1027,7 @@ const appHandler = async (req, res) => {
     if (pathname === '/api/settings' && req.method === 'POST') {
       const body = JSON.parse(await readRequestBody(req) || '{}');
       const updated = updateSettingsMap(body);
+      await syncToCloudDb(true);
       sendJson(res, 200, { ok: true, settings: updated });
       return;
     }
@@ -1054,6 +1070,7 @@ const appHandler = async (req, res) => {
     if (pathname === '/api/telegram/webhook' && req.method === 'POST') {
       const upd = JSON.parse(await readRequestBody(req) || '{}');
       await handleSingleTelegramUpdate(upd, getBotAppContext);
+      await syncToCloudDb(true);
       sendJson(res, 200, { ok: true });
       return;
     }
