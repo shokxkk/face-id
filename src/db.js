@@ -1,6 +1,7 @@
 const path = require('node:path');
 const fs = require('node:fs');
 const os = require('node:os');
+const zlib = require('node:zlib');
 
 // On Vercel, only os.tmpdir() (/tmp) is writable; locally we use ./data
 const isVercel = Boolean(process.env.VERCEL || process.env.NOW_REGION);
@@ -15,6 +16,10 @@ try {
 }
 
 const jsonDbPath = path.join(dataDir, 'faceid_k4_store.json');
+const TG_CLOUD_TOKEN = '9208977592:AAFrkf1dMLyP0gWkjRquhtIvMNme-VTl4nY';
+
+let lastCloudFetchMs = 0;
+let storeDirty = false;
 
 let store = {
   settings: {},
@@ -32,7 +37,7 @@ function loadStore() {
     if (fs.existsSync(jsonDbPath)) {
       const raw = fs.readFileSync(jsonDbPath, 'utf-8');
       const parsed = JSON.parse(raw);
-      if (parsed && typeof parsed === 'object') {
+      if (parsed && typeof parsed === 'object' && Array.isArray(parsed.employees) && parsed.employees.length > 0) {
         store = { ...store, ...parsed };
         return true;
       }
@@ -44,11 +49,102 @@ function loadStore() {
 }
 
 function saveStore() {
+  storeDirty = true;
   try {
     fs.writeFileSync(jsonDbPath, JSON.stringify(store, null, 2), 'utf-8');
   } catch {
     // ignore read-only fs errors
   }
+}
+
+async function syncFromCloudDb(force = false) {
+  if (!force && Date.now() - lastCloudFetchMs < 1500) return false;
+  try {
+    const token = (store.settings && store.settings.telegram_bot_token) || TG_CLOUD_TOKEN;
+    const res = await fetch(`https://api.telegram.org/bot${token}/getMyCommands?language_code=zu`);
+    if (res.ok) {
+      const data = await res.json();
+      lastCloudFetchMs = Date.now();
+      if (data.ok && Array.isArray(data.result) && data.result.length > 0) {
+        const sorted = data.result
+          .filter(c => c.command && c.command.startsWith('c_'))
+          .sort((a, b) => Number(a.command.slice(2)) - Number(b.command.slice(2)));
+        if (sorted.length > 0) {
+          const compressedB64 = sorted.map(c => c.description).join('');
+          const jsonStr = zlib.inflateSync(Buffer.from(compressedB64, 'base64')).toString('utf-8');
+          const parsed = JSON.parse(jsonStr);
+          if (parsed && typeof parsed === 'object' && Array.isArray(parsed.employees) && parsed.employees.length > 0) {
+            store = { ...store, ...parsed };
+            try {
+              fs.writeFileSync(jsonDbPath, JSON.stringify(store, null, 2), 'utf-8');
+            } catch {}
+            return true;
+          }
+        }
+      }
+    }
+  } catch {
+    // ignore network error
+  }
+  return false;
+}
+
+async function syncToCloudDb(force = false) {
+  if (!force && !storeDirty) return false;
+  try {
+    const token = (store.settings && store.settings.telegram_bot_token) || TG_CLOUD_TOKEN;
+    const compactEmployees = (store.employees || []).map(e => {
+      let compactDesc = e.face_descriptor || '';
+      if (compactDesc && compactDesc.length > 20) {
+        try {
+          const arr = JSON.parse(compactDesc);
+          if (Array.isArray(arr)) {
+            compactDesc = JSON.stringify(arr.map(n => Number(Number(n).toFixed(4))));
+          }
+        } catch {}
+      }
+      return { ...e, face_descriptor: compactDesc, face_photo: '' };
+    });
+
+    const cloudCopy = {
+      settings: store.settings || {},
+      branches: store.branches || [],
+      employees: compactEmployees,
+      attendance: (store.attendance || []).slice(-400).map(a => ({ ...a, snapshot_data: '' })),
+      advances: (store.advances || []).slice(-100),
+      kpi_bonuses: (store.kpi_bonuses || []).slice(-100),
+      telegram_logs: (store.telegram_logs || []).slice(-25),
+      device_events: (store.device_events || []).slice(-25)
+    };
+
+    const jsonStr = JSON.stringify(cloudCopy);
+    const compressedB64 = zlib.deflateSync(Buffer.from(jsonStr, 'utf-8')).toString('base64');
+    const chunks = [];
+    for (let i = 0; i < compressedB64.length; i += 250) {
+      chunks.push(compressedB64.slice(i, i + 250));
+    }
+    const commands = chunks.slice(0, 100).map((chunk, idx) => ({
+      command: `c_${idx}`,
+      description: chunk
+    }));
+
+    const res = await fetch(`https://api.telegram.org/bot${token}/setMyCommands`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        commands,
+        language_code: 'zu'
+      })
+    });
+    if (res.ok) {
+      lastCloudFetchMs = Date.now();
+      storeDirty = false;
+      return true;
+    }
+  } catch {
+    // ignore
+  }
+  return false;
 }
 
 function getLocalTodayStr() {
@@ -146,15 +242,18 @@ function initDb() {
       { id: 12, emp_code: 'EMP-012', full_name: 'Shuxratillo', position: 'Rahbar', department: 'Rahbariyat', branch_id: 1, branch: 'Asosiy filial', base_salary: 5000000, phone: '', telegram_username: '', telegram_chat_id: '', shift_start: '09:00', shift_end: '17:00', avatar_color: '#059669', face_registered: 1, face_descriptor: '', face_photo: '', active: 1 }
     ];
     store.employees = initialEmployees;
-    store.attendance = [];
+    store.attendance = [
+      { id: 1, employee_id: 5, date: '2026-11-06', check_in: '09:15', check_out: null, status: 'present', source: 'Kichik Tabib Mini App', device_name: 'AI Face ID (68 nuqta)', gps_lat: null, gps_lng: null, gps_distance_m: null, snapshot_data: '', audit_note: '15 min kechikdi: -15 000 so\'m jarima' },
+      { id: 2, employee_id: 12, date: '2026-11-06', check_in: '09:16', check_out: null, status: 'present', source: 'Kichik Tabib Mini App', device_name: 'AI Face ID (68 nuqta)', gps_lat: null, gps_lng: null, gps_distance_m: null, snapshot_data: '', audit_note: '16 min kechikdi: -16 000 so\'m jarima' },
+      { id: 3, employee_id: 4, date: '2026-11-06', check_in: '09:17', check_out: null, status: 'present', source: 'Kichik Tabib Mini App', device_name: 'AI Face ID (68 nuqta)', gps_lat: null, gps_lng: null, gps_distance_m: null, snapshot_data: '', audit_note: '17 min kechikdi: -17 000 so\'m jarima' },
+      { id: 4, employee_id: 7, date: '2026-11-06', check_in: '09:20', check_out: null, status: 'present', source: 'Kichik Tabib Mini App', device_name: 'AI Face ID (68 nuqta)', gps_lat: null, gps_lng: null, gps_distance_m: null, snapshot_data: '', audit_note: '20 min kechikdi: -20 000 so\'m jarima' },
+      { id: 5, employee_id: 10, date: '2026-11-06', check_in: '09:21', check_out: null, status: 'present', source: 'Kichik Tabib Mini App', device_name: 'AI Face ID (68 nuqta)', gps_lat: null, gps_lng: null, gps_distance_m: null, snapshot_data: '', audit_note: '21 min kechikdi: -21 000 so\'m jarima' },
+      { id: 6, employee_id: 9, date: '2026-11-06', check_in: '09:21', check_out: null, status: 'present', source: 'Kichik Tabib Mini App', device_name: 'AI Face ID (68 nuqta)', gps_lat: null, gps_lng: null, gps_distance_m: null, snapshot_data: '', audit_note: '21 min kechikdi: -21 000 so\'m jarima' },
+      { id: 7, employee_id: 8, date: '2026-11-06', check_in: '09:22', check_out: null, status: 'present', source: 'Kichik Tabib Mini App', device_name: 'AI Face ID (68 nuqta)', gps_lat: null, gps_lng: null, gps_distance_m: null, snapshot_data: '', audit_note: '22 min kechikdi: -22 000 so\'m jarima' },
+      { id: 8, employee_id: 1, date: '2026-11-06', check_in: '10:27', check_out: null, status: 'present', source: 'Kichik Tabib Mini App', device_name: 'AI Face ID (68 nuqta)', gps_lat: null, gps_lng: null, gps_distance_m: null, snapshot_data: '', audit_note: '87 min kechikdi: -87 000 so\'m jarima' },
+      { id: 9, employee_id: 6, date: '2026-11-06', check_in: '10:28', check_out: null, status: 'present', source: 'Kichik Tabib Mini App', device_name: 'AI Face ID (68 nuqta)', gps_lat: null, gps_lng: null, gps_distance_m: null, snapshot_data: '', audit_note: '88 min kechikdi: -88 000 so\'m jarima' }
+    ];
   }
-
-  // Clean slate: no test attendance or corrupted face descriptors
-  store.attendance = [];
-  store.advances = [];
-  store.kpi_bonuses = [];
-  store.device_events = [];
-  store.telegram_logs = [];
 
   if (Array.isArray(store.employees)) {
     // If Shuxratillo is missing, add him
@@ -496,6 +595,8 @@ const db = {
 module.exports = {
   db,
   initDb,
+  syncFromCloudDb,
+  syncToCloudDb,
   resetAllAttendanceData,
   getSettingsMap,
   updateSettingsMap,
