@@ -17,6 +17,8 @@ try {
 
 const jsonDbPath = path.join(dataDir, 'faceid_k4_store.json');
 const TG_CLOUD_TOKEN = '9208977592:AAFrkf1dMLyP0gWkjRquhtIvMNme-VTl4nY';
+const BUCKET_LANGS = ['zu', 'xh', 'yo', 'ig', 'sn', 'st', 'tn', 'ts', 've', 'ss', 'rw', 'rn', 'ny', 'mg', 'lg'];
+const CHUNKS_PER_BUCKET = 18;
 
 let lastCloudFetchMs = 0;
 let storeDirty = false;
@@ -57,31 +59,55 @@ function saveStore() {
   }
 }
 
+async function fetchBucketChunks(token, lang) {
+  const res = await fetch(`https://api.telegram.org/bot${token}/getMyCommands?language_code=${lang}`);
+  if (!res.ok) return { numBuckets: 1, chunks: [] };
+  const data = await res.json();
+  if (!data.ok || !Array.isArray(data.result)) return { numBuckets: 1, chunks: [] };
+
+  let numBuckets = 1;
+  const metaCmd = data.result.find(c => c.command === 'meta');
+  if (metaCmd && typeof metaCmd.description === 'string' && metaCmd.description.startsWith('buckets:')) {
+    numBuckets = Number(metaCmd.description.split(':')[1]) || 1;
+  }
+
+  const sorted = data.result
+    .filter(c => c.command && c.command.startsWith('c_'))
+    .sort((a, b) => Number(a.command.slice(2)) - Number(b.command.slice(2)))
+    .map(c => c.description);
+
+  return { numBuckets, chunks: sorted };
+}
+
 async function syncFromCloudDb(force = false) {
   if (!force && Date.now() - lastCloudFetchMs < 1500) return false;
   try {
     const token = (store.settings && store.settings.telegram_bot_token) || TG_CLOUD_TOKEN;
-    const res = await fetch(`https://api.telegram.org/bot${token}/getMyCommands?language_code=zu`);
-    if (res.ok) {
-      const data = await res.json();
-      lastCloudFetchMs = Date.now();
-      if (data.ok && Array.isArray(data.result) && data.result.length > 0) {
-        const sorted = data.result
-          .filter(c => c.command && c.command.startsWith('c_'))
-          .sort((a, b) => Number(a.command.slice(2)) - Number(b.command.slice(2)));
-        if (sorted.length > 0) {
-          const compressedB64 = sorted.map(c => c.description).join('');
-          const jsonStr = zlib.inflateSync(Buffer.from(compressedB64, 'base64')).toString('utf-8');
-          const parsed = JSON.parse(jsonStr);
-          if (parsed && typeof parsed === 'object' && Array.isArray(parsed.employees) && parsed.employees.length > 0) {
-            store = { ...store, ...parsed };
-            try {
-              fs.writeFileSync(jsonDbPath, JSON.stringify(store, null, 2), 'utf-8');
-            } catch {}
-            return true;
-          }
-        }
+    const first = await fetchBucketChunks(token, BUCKET_LANGS[0]);
+    if (first.chunks.length === 0) return false;
+
+    const allChunks = [...first.chunks];
+    if (first.numBuckets > 1) {
+      const extraPromises = [];
+      for (let b = 1; b < Math.min(first.numBuckets, BUCKET_LANGS.length); b++) {
+        extraPromises.push(fetchBucketChunks(token, BUCKET_LANGS[b]));
       }
+      const extraResults = await Promise.all(extraPromises);
+      for (const r of extraResults) {
+        allChunks.push(...r.chunks);
+      }
+    }
+
+    const compressedB64 = allChunks.join('');
+    const jsonStr = zlib.inflateSync(Buffer.from(compressedB64, 'base64')).toString('utf-8');
+    const parsed = JSON.parse(jsonStr);
+    if (parsed && typeof parsed === 'object' && Array.isArray(parsed.employees) && parsed.employees.length > 0) {
+      store = { ...store, ...parsed };
+      lastCloudFetchMs = Date.now();
+      try {
+        fs.writeFileSync(jsonDbPath, JSON.stringify(store, null, 2), 'utf-8');
+      } catch {}
+      return true;
     }
   } catch {
     // ignore network error
@@ -99,7 +125,7 @@ async function syncToCloudDb(force = false) {
         try {
           const arr = JSON.parse(compactDesc);
           if (Array.isArray(arr)) {
-            compactDesc = JSON.stringify(arr.map(n => Number(Number(n).toFixed(4))));
+            compactDesc = JSON.stringify(arr.map(n => Number(Number(n).toFixed(3))));
           }
         } catch {}
       }
@@ -110,33 +136,58 @@ async function syncToCloudDb(force = false) {
       settings: store.settings || {},
       branches: store.branches || [],
       employees: compactEmployees,
-      attendance: (store.attendance || []).slice(-400).map(a => ({ ...a, snapshot_data: '' })),
+      attendance: (store.attendance || []).slice(-500).map(a => ({
+        id: a.id,
+        employee_id: a.employee_id,
+        date: a.date,
+        check_in: a.check_in,
+        check_out: a.check_out,
+        status: a.status,
+        source: a.source || 'Face ID',
+        device_name: a.device_name || 'AI Face ID',
+        audit_note: a.audit_note || ''
+      })),
       advances: (store.advances || []).slice(-100),
-      kpi_bonuses: (store.kpi_bonuses || []).slice(-100),
-      telegram_logs: (store.telegram_logs || []).slice(-25),
-      device_events: (store.device_events || []).slice(-25)
+      kpi_bonuses: (store.kpi_bonuses || []).slice(-100)
     };
 
     const jsonStr = JSON.stringify(cloudCopy);
     const compressedB64 = zlib.deflateSync(Buffer.from(jsonStr, 'utf-8')).toString('base64');
-    const chunks = [];
+    const allChunks = [];
     for (let i = 0; i < compressedB64.length; i += 250) {
-      chunks.push(compressedB64.slice(i, i + 250));
+      allChunks.push(compressedB64.slice(i, i + 250));
     }
-    const commands = chunks.slice(0, 100).map((chunk, idx) => ({
-      command: `c_${idx}`,
-      description: chunk
-    }));
 
-    const res = await fetch(`https://api.telegram.org/bot${token}/setMyCommands`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        commands,
-        language_code: 'zu'
-      })
-    });
-    if (res.ok) {
+    const numBuckets = Math.max(1, Math.ceil(allChunks.length / CHUNKS_PER_BUCKET));
+    const savePromises = [];
+
+    for (let b = 0; b < Math.min(numBuckets, BUCKET_LANGS.length); b++) {
+      const lang = BUCKET_LANGS[b];
+      const slice = allChunks.slice(b * CHUNKS_PER_BUCKET, (b + 1) * CHUNKS_PER_BUCKET);
+      const commands = slice.map((chunk, idx) => ({
+        command: `c_${idx}`,
+        description: chunk
+      }));
+      if (b === 0) {
+        commands.unshift({
+          command: 'meta',
+          description: `buckets:${numBuckets}`
+        });
+      }
+      savePromises.push(
+        fetch(`https://api.telegram.org/bot${token}/setMyCommands`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            commands,
+            language_code: lang
+          })
+        }).then(r => r.json())
+      );
+    }
+
+    const results = await Promise.all(savePromises);
+    if (results.every(r => r && r.ok)) {
       lastCloudFetchMs = Date.now();
       storeDirty = false;
       return true;
@@ -243,15 +294,16 @@ function initDb() {
     ];
     store.employees = initialEmployees;
     store.attendance = [
-      { id: 1, employee_id: 5, date: '2026-11-06', check_in: '09:15', check_out: null, status: 'present', source: 'Kichik Tabib Mini App', device_name: 'AI Face ID (68 nuqta)', gps_lat: null, gps_lng: null, gps_distance_m: null, snapshot_data: '', audit_note: '15 min kechikdi: -15 000 so\'m jarima' },
-      { id: 2, employee_id: 12, date: '2026-11-06', check_in: '09:16', check_out: null, status: 'present', source: 'Kichik Tabib Mini App', device_name: 'AI Face ID (68 nuqta)', gps_lat: null, gps_lng: null, gps_distance_m: null, snapshot_data: '', audit_note: '16 min kechikdi: -16 000 so\'m jarima' },
-      { id: 3, employee_id: 4, date: '2026-11-06', check_in: '09:17', check_out: null, status: 'present', source: 'Kichik Tabib Mini App', device_name: 'AI Face ID (68 nuqta)', gps_lat: null, gps_lng: null, gps_distance_m: null, snapshot_data: '', audit_note: '17 min kechikdi: -17 000 so\'m jarima' },
-      { id: 4, employee_id: 7, date: '2026-11-06', check_in: '09:20', check_out: null, status: 'present', source: 'Kichik Tabib Mini App', device_name: 'AI Face ID (68 nuqta)', gps_lat: null, gps_lng: null, gps_distance_m: null, snapshot_data: '', audit_note: '20 min kechikdi: -20 000 so\'m jarima' },
-      { id: 5, employee_id: 10, date: '2026-11-06', check_in: '09:21', check_out: null, status: 'present', source: 'Kichik Tabib Mini App', device_name: 'AI Face ID (68 nuqta)', gps_lat: null, gps_lng: null, gps_distance_m: null, snapshot_data: '', audit_note: '21 min kechikdi: -21 000 so\'m jarima' },
-      { id: 6, employee_id: 9, date: '2026-11-06', check_in: '09:21', check_out: null, status: 'present', source: 'Kichik Tabib Mini App', device_name: 'AI Face ID (68 nuqta)', gps_lat: null, gps_lng: null, gps_distance_m: null, snapshot_data: '', audit_note: '21 min kechikdi: -21 000 so\'m jarima' },
-      { id: 7, employee_id: 8, date: '2026-11-06', check_in: '09:22', check_out: null, status: 'present', source: 'Kichik Tabib Mini App', device_name: 'AI Face ID (68 nuqta)', gps_lat: null, gps_lng: null, gps_distance_m: null, snapshot_data: '', audit_note: '22 min kechikdi: -22 000 so\'m jarima' },
-      { id: 8, employee_id: 1, date: '2026-11-06', check_in: '10:27', check_out: null, status: 'present', source: 'Kichik Tabib Mini App', device_name: 'AI Face ID (68 nuqta)', gps_lat: null, gps_lng: null, gps_distance_m: null, snapshot_data: '', audit_note: '87 min kechikdi: -87 000 so\'m jarima' },
-      { id: 9, employee_id: 6, date: '2026-11-06', check_in: '10:28', check_out: null, status: 'present', source: 'Kichik Tabib Mini App', device_name: 'AI Face ID (68 nuqta)', gps_lat: null, gps_lng: null, gps_distance_m: null, snapshot_data: '', audit_note: '88 min kechikdi: -88 000 so\'m jarima' }
+      { id: 1, employee_id: 5, date: '2026-11-06', check_in: '09:15', check_out: '17:03', status: 'present', source: 'Kichik Tabib Mini App', device_name: 'AI Face ID (68 nuqta)', gps_lat: null, gps_lng: null, gps_distance_m: null, snapshot_data: '', audit_note: '15 min kechikdi: -15 000 so\'m jarima' },
+      { id: 2, employee_id: 12, date: '2026-11-06', check_in: '09:16', check_out: '16:56', status: 'present', source: 'Kichik Tabib Mini App', device_name: 'AI Face ID (68 nuqta)', gps_lat: null, gps_lng: null, gps_distance_m: null, snapshot_data: '', audit_note: '16 min kechikdi: -16 000 so\'m jarima' },
+      { id: 3, employee_id: 4, date: '2026-11-06', check_in: '09:17', check_out: '17:03', status: 'present', source: 'Kichik Tabib Mini App', device_name: 'AI Face ID (68 nuqta)', gps_lat: null, gps_lng: null, gps_distance_m: null, snapshot_data: '', audit_note: '17 min kechikdi: -17 000 so\'m jarima' },
+      { id: 4, employee_id: 7, date: '2026-11-06', check_in: '09:20', check_out: '17:01', status: 'present', source: 'Kichik Tabib Mini App', device_name: 'AI Face ID (68 nuqta)', gps_lat: null, gps_lng: null, gps_distance_m: null, snapshot_data: '', audit_note: '20 min kechikdi: -20 000 so\'m jarima' },
+      { id: 5, employee_id: 10, date: '2026-11-06', check_in: '09:21', check_out: '17:01', status: 'present', source: 'Kichik Tabib Mini App', device_name: 'AI Face ID (68 nuqta)', gps_lat: null, gps_lng: null, gps_distance_m: null, snapshot_data: '', audit_note: '21 min kechikdi: -21 000 so\'m jarima' },
+      { id: 6, employee_id: 9, date: '2026-11-06', check_in: '09:21', check_out: '17:00', status: 'present', source: 'Kichik Tabib Mini App', device_name: 'AI Face ID (68 nuqta)', gps_lat: null, gps_lng: null, gps_distance_m: null, snapshot_data: '', audit_note: '21 min kechikdi: -21 000 so\'m jarima' },
+      { id: 7, employee_id: 8, date: '2026-11-06', check_in: '09:22', check_out: '16:58', status: 'present', source: 'Kichik Tabib Mini App', device_name: 'AI Face ID (68 nuqta)', gps_lat: null, gps_lng: null, gps_distance_m: null, snapshot_data: '', audit_note: '22 min kechikdi: -22 000 so\'m jarima' },
+      { id: 8, employee_id: 1, date: '2026-11-06', check_in: '10:27', check_out: '17:46', status: 'present', source: 'Kichik Tabib Mini App', device_name: 'AI Face ID (68 nuqta)', gps_lat: null, gps_lng: null, gps_distance_m: null, snapshot_data: '', audit_note: '87 min kechikdi: -87 000 so\'m jarima' },
+      { id: 9, employee_id: 6, date: '2026-11-06', check_in: '10:28', check_out: '17:46', status: 'present', source: 'Kichik Tabib Mini App', device_name: 'AI Face ID (68 nuqta)', gps_lat: null, gps_lng: null, gps_distance_m: null, snapshot_data: '', audit_note: '88 min kechikdi: -88 000 so\'m jarima' },
+      { id: 10, employee_id: 1, date: '2026-11-07', check_in: '09:48', check_out: null, status: 'present', source: 'Kichik Tabib Mini App', device_name: 'AI Face ID (68 nuqta)', gps_lat: null, gps_lng: null, gps_distance_m: null, snapshot_data: '', audit_note: '48 min kechikdi: -48 000 so\'m jarima' }
     ];
   }
 
