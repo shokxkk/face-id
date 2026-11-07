@@ -264,7 +264,15 @@ async function processAttendanceAction({
     checkOut = null;
     status = 'leave';
   } else if (resolvedAction === 'checkin') {
-    checkIn = nowTime;
+    if (checkIn && source !== 'Admin Panel') {
+      // Employee already checked in earlier today; don't overwrite morning arrival time
+      if (nowTime >= '14:00') {
+        resolvedAction = 'checkout';
+        checkOut = nowTime;
+      }
+    } else {
+      checkIn = nowTime;
+    }
     status = 'present';
   } else if (resolvedAction === 'checkout') {
     if (!checkIn) checkIn = settings.work_start_time || '09:00';
@@ -325,6 +333,9 @@ async function processAttendanceAction({
   );
 
   const savedRecord = db.prepare(`SELECT * FROM attendance WHERE employee_id = ? AND date = ?`).get(emp.id, targetDate);
+
+  // Sync to Cloud DB immediately before sending Telegram photos so data is always persisted first
+  await syncToCloudDb(true);
 
   const tgResult = await notifyAttendanceEvent({
     employee: emp,
